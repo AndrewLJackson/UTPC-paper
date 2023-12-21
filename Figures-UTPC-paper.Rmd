@@ -1,0 +1,381 @@
+---
+title: "Generate figures for UTPC paper"
+output: html_notebook
+---
+
+
+## Setup
+
+```{r}
+# load required libraries
+library(openxlsx)
+library(nls.multstart)
+library(rTPC)
+library(viridis)
+library(png)
+library(plyr)
+library(rTPC)
+library(yarrr)
+library(broom)
+library(tidyverse)
+```
+
+
+### Figure 1
+
+```{r}
+# -------------
+# Figure 1
+
+layout(matrix(c(1,3,2,3),2))
+par(oma = c(6,4,2,4), mar = c(5,1,2,3))
+
+# Set the data
+temp = -10:50
+rate = seq(0, 1.5, length.out = length(temp))
+
+# Create a data frame
+frame <- data.frame(temp = temp, b = 1 - 0.008*(temp-30)^2)
+frame$b <- ifelse(frame$temp < 30, 1, frame$b)
+
+# Define the growth rate 'a' for the exponential function
+a <- 0.07 
+
+# Calculate the positive exponential values for 'temp'
+exp_values <- exp(a * (temp-30)) 
+
+# Plot the data
+plot(frame$temp, frame$b, type='n', ylim=c(0,1.2), xlim = c(0,52), xlab="", ylab="", xaxt = "n", axes = F, yaxt = "n", xaxs = "i", yaxs = "i") 
+
+# Add the dotted line for frame$b
+lines(frame$temp, frame$b, type='l', pch=20, col="coral2", lty=2, lwd = 1.4)
+
+# Add the exponential line to the graph as a dotted line
+lines(temp, exp_values, type='l', pch=20, col="cornflowerblue", lty=2, lwd = 1.4)
+
+axis(1, lwd.tick = 0, labels = F)
+axis(2, lwd.tick = 0, labels = F)
+
+mtext(side = 2, "Rate", line = 1.5)
+mtext(side = 1, "Temperature", line = 2)
+
+arrows(20, -0.1, 32, -0.1, xpd = TRUE, length = 0.1)
+arrows(-2, 0.45, -2, 0.75, xpd = TRUE, length = 0.1)
+
+mtext("(a)", cex = 1.5, adj = -0.2, line = 1)
+
+
+
+# -----
+# Panel B
+
+par(mar = c(5,3,2,1))
+
+# Plot the data
+plot(frame$temp, frame$b, type='n', ylim=c(0,1.3), xlim = c(0,40), xlab="", ylab="", xaxt = "n", axes = F, yaxt = "n", xaxs = "i", yaxs = "i") 
+axis(1, lwd.tick = 0, labels = F)
+axis(2, at = c(-10,1.3), lwd.tick = 0, labels = F)
+
+# Define the growth rate 'a' for the second exponential function
+a <- 0.2 
+
+# Calculate the positive exponential values for 'temp'
+exp_values2 <- exp(a * (temp-30))
+
+polygon(c(temp+4, rev(temp+6)), c(exp_values, rev(exp_values2+0.1)), col = rgb(0,0,0,0.05), border = F)
+
+# Add the exponential lines to the graph 
+lines(temp+4, exp_values, type='l', pch=20, col="red", lty=1, lwd = 1.2)
+lines(temp+6, exp_values2+0.1, type='l', pch=20, col="blue", lty=1, lwd = 1.2)
+
+mtext(side = 2, "Rate", line = 2)
+mtext(side = 1, "Temperature", line = 2)
+
+arrows(15, -0.1, 25, -0.1, xpd = TRUE, length = 0.1)
+arrows(-2.2, 0.5, -2.2, 0.8, xpd = TRUE, length = 0.1)
+
+mtext("(b)", cex = 1.5, adj = -0.2, line = 1)
+
+
+# Panel C
+# We take a single curve from the example dataset rTPC - a dataset of 60 TPCs of photosynthesis of the aquatic algae, Chlorella vulgaris.
+
+data("chlorella_tpc")
+d <- subset(chlorella_tpc, curve_id == 1)
+
+par(mar = c(0,10,2,10))
+
+# Plot the data
+plot(d$temp, d$rate, las = 1, type = "n", xaxs = "i", yaxs = "i", ylim = c(0,2), xlim = c(15,50), ylab = "", xlab = "")
+rect(par("usr")[1], par("usr")[3], par("usr")[2], par("usr")[4], col=rgb(0,0,0,0.05), border=NA)
+
+mtext(side = 2, expression("Rate of CO"[2]*" uptake ("*mu*"mol m"^-2*" s"^-1*")"), line = 3)
+
+# beta_2012 
+# get start values and fit model
+start_vals <- get_start_vals(d$temp, d$rate, model_name = 'beta_2012')
+# fit model
+mod <- nls.multstart::nls_multstart(rate~beta_2012(temp = temp, a, b, c, d, e),
+data = d,
+iter = c(7,7,7,7,7),
+start_lower = start_vals - 10,
+start_upper = start_vals + 10,
+lower = get_lower_lims(d$temp, d$rate, model_name = 'beta_2012'),
+upper = get_upper_lims(d$temp, d$rate, model_name = 'beta_2012'),
+supp_errors = 'Y',
+convergence_count = FALSE)
+
+# get predictions
+preds <- data.frame(temp = seq(min(d$temp), max(d$temp), length.out = 100))
+preds <- broom::augment(mod, newdata = preds)
+
+col <- viridis(7)
+lines(preds$temp, preds$.fitted, col = col[1], lwd = 1.5)
+
+#boatman 2017
+# get start values and fit model
+start_vals <- get_start_vals(d$temp, d$rate, model_name = 'boatman_2017')
+# fit model
+mod <- nls.multstart::nls_multstart(rate~boatman_2017(temp = temp, rmax, tmin, tmax, a, b),
+data = d,
+iter = c(4,4,4,4,4),
+start_lower = start_vals - 10,
+start_upper = start_vals + 10,
+lower = get_lower_lims(d$temp, d$rate, model_name = 'boatman_2017'),
+upper = get_upper_lims(d$temp, d$rate, model_name = 'boatman_2017'),
+supp_errors = 'Y',
+convergence_count = FALSE)
+
+# get predictions
+preds <- data.frame(temp = seq(min(d$temp), max(d$temp), length.out = 100))
+preds <- broom::augment(mod, newdata = preds)
+
+lines(preds$temp, preds$.fitted, col = col[2], lwd = 1.5)
+
+# delong 2017
+# get start values and fit model
+start_vals <- get_start_vals(d$temp, d$rate, model_name = 'delong_2017')
+# fit model
+mod <- nls.multstart::nls_multstart(rate~delong_2017(temp = temp, c, eb, ef, tm,ehc),
+data = d,
+iter = c(4,4,4,4,4),
+start_lower = start_vals - 10,
+start_upper = start_vals + 10,
+lower = get_lower_lims(d$temp, d$rate, model_name = 'delong_2017'),
+upper = get_upper_lims(d$temp, d$rate, model_name = 'delong_2017'),
+supp_errors = 'Y',
+convergence_count = FALSE)
+
+# get predictions
+preds <- data.frame(temp = seq(min(d$temp), max(d$temp), length.out = 100))
+preds <- broom::augment(mod, newdata = preds)
+
+lines(preds$temp, preds$.fitted, col = col[3], lwd = 1.5)
+
+# joehnk 2008
+# get start values and fit model
+start_vals <- get_start_vals(d$temp, d$rate, model_name = 'joehnk_2008')
+# fit model
+mod <- nls.multstart::nls_multstart(rate~joehnk_2008(temp = temp, rmax, topt, a, b, c),
+data = d,
+iter = c(3,3,3,3,3),
+start_lower = start_vals - 10,
+start_upper = start_vals + 10,
+lower = get_lower_lims(d$temp, d$rate, model_name = 'joehnk_2008'),
+upper = get_upper_lims(d$temp, d$rate, model_name = 'joehnk_2008'),
+supp_errors = 'Y',
+convergence_count = FALSE)
+
+# get predictions
+preds <- data.frame(temp = seq(min(d$temp), max(d$temp), length.out = 100))
+preds <- broom::augment(mod, newdata = preds)
+
+lines(preds$temp, preds$.fitted, col = col[4], lwd = 1.5)
+
+# hinshelwood_1947
+# get start values and fit model
+start_vals <- get_start_vals(d$temp, d$rate, model_name = 'hinshelwood_1947')
+# fit model
+mod <- nls.multstart::nls_multstart(rate~hinshelwood_1947(temp = temp,a, e, b, eh),
+data = d,
+iter = c(5,5,5,5),
+start_lower = start_vals - 1,
+start_upper = start_vals + 1,
+lower = get_lower_lims(d$temp, d$rate, model_name = 'hinshelwood_1947'),
+upper = get_upper_lims(d$temp, d$rate, model_name = 'hinshelwood_1947'),
+supp_errors = 'Y',
+convergence_count = FALSE)
+
+# get predictions
+preds <- data.frame(temp = seq(min(d$temp), max(d$temp), length.out = 100))
+preds <- broom::augment(mod, newdata = preds)
+
+lines(preds$temp, preds$.fitted, col = col[5], lwd = 1.5)
+
+# Rezende 2019
+# get start values and fit model
+start_vals <- get_start_vals(d$temp, d$rate, model_name = 'rezende_2019')
+# fit model
+mod <- nls.multstart::nls_multstart(rate~rezende_2019(temp = temp, q10, a, b, c),
+data = d,
+iter = c(4,4,4,4),
+start_lower = start_vals - 10,
+start_upper = start_vals + 10,
+lower = get_lower_lims(d$temp, d$rate, model_name = 'rezende_2019'),
+upper = get_upper_lims(d$temp, d$rate, model_name = 'rezende_2019'),
+supp_errors = 'Y',
+convergence_count = FALSE)
+
+# get predictions
+preds <- data.frame(temp = seq(min(d$temp), max(d$temp), length.out = 100))
+preds <- broom::augment(mod, newdata = preds)
+
+lines(preds$temp, preds$.fitted, col = col[6], lwd = 1.5)
+
+points(d$temp, d$rate, cex = 1.75, pch = 21, bg = "seagreen", col = "white")
+legend("topleft", title = "TPC model", c("beta 2012", "boatman 2017", "delong 2017", "joehnk 2008", "hinshelwood 1947", "rezende 2019"), lwd = 2, col = c(col[1], col[2],col[3],col[4], col[5],col[6]), bty = "n")
+
+axis(1, lwd.tick = 0, labels = F)
+axis(2, at = c(-10,1.3), lwd.tick = 0, labels = F)
+
+mtext("(c)", cex = 1.5, adj = -0.07, line = 1)
+mtext(side = 1, "Temperature", line = 3)
+
+```
+
+### Figure 2
+
+```{r}
+# -------------
+# Figure 2
+# Plot raw data
+		
+quartz("Fig2", 11,8)
+par(mfrow = c(2,3), oma = c(3,3,3,3), mar = c(3.5,3.5,3.5,3.5))
+
+# Pannel A
+plot(photo$ta, photo$pf, type = "n", ylab = "", xlab = "", las = 1, xlim = c(0,60), xaxs = "i",yaxs = "i", ylim = c(-0.01,6.5), las = 1,  axes = "F")
+
+axis(1, las = 1, cex.axis = 1.2)
+axis(2, las = 1, cex.axis = 1.2)
+
+fitted_photo <- subset(fitted, type == "pho")
+for(i in 1:nrow(fitted_photo)){
+plot.thermal.curve(fitted_photo[i,]$q10,
+fitted_photo[i,]$cte,
+fitted_photo[i,]$thr,
+fitted_photo[i,]$decay,
+col.q10=NA,bound = F,
+col.th=NA,
+points=TRUE, col = "seagreen")
+}
+
+points(photo$ta, photo$pf, pch = 21, lwd = 0.7, bg = "seagreen", cex = 1.2, col = "white")
+
+mtext(side = 2, expression("Rate of CO"[2]*" uptake ("*mu*"mol m"^-2*" s"^-1*")"), line = 3)
+mtext("Photosynthesis", line = 1)
+mtext(line = 0.75, adj = -0.1, "(a)")
+
+# Pannel B
+plant <- readPNG("plant.png")
+rasterImage(plant, 2, 4.5, 15, 6.6)
+
+plot(run$ta, run$pf, type = "n", ylab = "", xlab = "", las = 1, xaxs = "i",yaxs = "i", ylim = c(0, 5.5), xlim = c(0,50), axes = "F")
+
+fitted_run <- subset(fitted, type == "run")
+for(i in 1:nrow(fitted_run)){
+plot.thermal.curve(fitted_run[i,]$q10,
+fitted_run[i,]$cte,
+fitted_run[i,]$thr,
+fitted_run[i,]$decay,
+col.q10=NA,bound = F,
+col.th=NA,
+points=TRUE, col = "coral")
+}
+
+points(run$ta, run$pf, pch = 21, lwd = 0.7, bg = "coral1", cex = 1.2, col = "white")
+
+axis(1, las = 1, cex.axis = 1.2)
+axis(2, las = 1, cex.axis = 1.2)
+
+mtext(side = 2, expression("Running speed (m"^-1*")"), line = 3)
+mtext(side = 1, expression(""*italic("T"["trial"]*"")*" ("*degree*"C)"), line = 4)
+mtext("Running speed", line = 1)
+mtext(line = 0.75, adj = -0.1, "(b)")
+
+lizard <- readPNG("lizard.png")
+rasterImage(lizard, 2, 3.5, 18, 5.5)
+
+# Pannel C
+plot(pop$ta, pop$pf, type = "n", ylab = "", xlab = "", las = 1, xaxs = "i",yaxs = "i", ylim = c(0, 0.9), xlim = c(0,50), axes = "F")
+
+fitted_pop <- subset(fitted, type == "pop")
+for(i in 1:nrow(fitted_pop)){
+plot.thermal.curve(fitted_run[i,]$q10,
+fitted_pop[i,]$cte,
+fitted_pop[i,]$thr,
+fitted_pop[i,]$decay,
+col.q10=NA,bound = F,
+col.th=NA,
+points=TRUE, col = "cornflowerblue")
+}
+
+points(pop$ta, pop$pf, pch = 21, bg = "cornflowerblue", cex = 1.2, col = "white")
+
+axis(1, las = 1, cex.axis = 1.2)
+axis(2, las = 1, cex.axis = 1.2)
+mtext(side = 2, expression("Intrinsic rate of increase (day"^-1*")"), line = 3)
+mtext("Population growth rate", line = 1)
+mtext(line = 0.75, adj = -0.1, "(c)")
+
+insect <- readPNG("insect.png")
+rasterImage(insect, 2, 0.6, 18, 0.85)
+
+# Plot re-scaled data
+
+# Pannel D
+plot(photo$ta_r,photo$pf_r, pch = 21, lwd = 0.7, bg = "seagreen", col = "white", xlim = c(-4,1), xaxs = "i",yaxs = "i", 
+ylim = c(0,1.3), las = 1,  axes = "F", 		ylab = "", xlab = "", cex = 1.2)
+
+axis(1, las = 1, cex.axis = 1.2)
+axis(2, las = 1, cex.axis = 1.2)
+
+mtext(side = 2, expression("Pf / Pf"["max"]*""), line = 3.3)
+
+#generate 100 values within the thermal range for plotting
+ta <- seq(-6,1, length = 100)
+fit <- exp(ta)*(1-ta)
+lines(ta,fit,col = "white", lwd = 4);lines(ta,fit,col = "seagreen", lwd = 3)
+mtext(line = -0.2, adj = -0.1, "(d)")
+
+# Pannel E
+plot(run$ta_r,run$pf_r, pch = 21, bg = "coral1", col = "white", lwd = 0.7, xlim = c(-4,1), xaxs = "i",yaxs = "i", 
+ylim = c(0,1.3), las = 1,  axes = "F", ylab 		= "", xlab = "", cex = 1.2)
+
+axis(1, las = 1, cex.axis = 1.2)
+axis(2, las = 1, cex.axis = 1.2)
+
+run$fit <- exp(run$ta_r)*(1-run$ta_r)
+		
+run <- run[order(run$ta_r),]
+lines(run$ta_r, run$fit, col = "white", lwd = 4); lines(run$ta_r, run$fit, col = "coral", lwd = 3)
+
+mtext(side = 1, expression(italic("(T"["trial"]*" - T"["opt"]*") / (T"["c"]*" - T"["opt"]*")")), line = 4, font = 2)
+mtext(line = -0.2, adj = -0.1, "(e)")
+
+# Pannel F
+plot(pop$ta_r, pop$pf_r, pch = 21, bg = "cornflowerblue", col = "white", lwd = 0.7, xlim = c(-4,1), xaxs = "i",yaxs = "i", 
+ylim = c(0,1.3), las = 1,  axes = 		"F", ylab = "", xlab = "", cex = 1.2)
+
+axis(1, las = 1, cex.axis = 1.2)
+axis(2, las = 1, cex.axis = 1.2)
+
+pop$fit <- exp(pop$ta_r)*(1-pop$ta_r)
+
+pop <- pop[order(pop$ta_r),]
+lines(pop$ta_r, pop$fit, col = "white", lwd = 4);lines(pop$ta_r, pop$fit, col = "cornflowerblue", lwd = 3)
+mtext(line = -0.2, adj = -0.1, "(f)")
+
+# end of code
+```
+
