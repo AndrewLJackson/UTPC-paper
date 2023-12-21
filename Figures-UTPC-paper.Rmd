@@ -245,6 +245,16 @@ mtext(side = 1, "Temperature", line = 3)
 
 ### Figure 2
 
+Process the raw data along with the fitted parameters for plotting.
+
+```{r}
+
+# load the raw data and estimates parameters
+load("output/combined_dat_params.rda")
+
+```
+
+
 ```{r}
 # -------------
 # Figure 2
@@ -277,8 +287,8 @@ mtext("Photosynthesis", line = 1)
 mtext(line = 0.75, adj = -0.1, "(a)")
 
 # Pannel B
-plant <- readPNG("plant.png")
-rasterImage(plant, 2, 4.5, 15, 6.6)
+# plant <- readPNG("plant.png")
+# rasterImage(plant, 2, 4.5, 15, 6.6)
 
 plot(run$ta, run$pf, type = "n", ylab = "", xlab = "", las = 1, xaxs = "i",yaxs = "i", ylim = c(0, 5.5), xlim = c(0,50), axes = "F")
 
@@ -303,8 +313,8 @@ mtext(side = 1, expression(""*italic("T"["trial"]*"")*" ("*degree*"C)"), line = 
 mtext("Running speed", line = 1)
 mtext(line = 0.75, adj = -0.1, "(b)")
 
-lizard <- readPNG("lizard.png")
-rasterImage(lizard, 2, 3.5, 18, 5.5)
+# lizard <- readPNG("lizard.png")
+# rasterImage(lizard, 2, 3.5, 18, 5.5)
 
 # Pannel C
 plot(pop$ta, pop$pf, type = "n", ylab = "", xlab = "", las = 1, xaxs = "i",yaxs = "i", ylim = c(0, 0.9), xlim = c(0,50), axes = "F")
@@ -328,8 +338,8 @@ mtext(side = 2, expression("Intrinsic rate of increase (day"^-1*")"), line = 3)
 mtext("Population growth rate", line = 1)
 mtext(line = 0.75, adj = -0.1, "(c)")
 
-insect <- readPNG("insect.png")
-rasterImage(insect, 2, 0.6, 18, 0.85)
+# insect <- readPNG("insect.png")
+# rasterImage(insect, 2, 0.6, 18, 0.85)
 
 # Plot re-scaled data
 
