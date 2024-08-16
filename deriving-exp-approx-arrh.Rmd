@@ -1,0 +1,47 @@
+---
+title: "Derivation of the exponential approximation for Arrhenius equation"
+output: html_notebook
+---
+
+
+Define symbols
+
+| Symbol | Explanation |
+| ------ | ----------- |
+| $y$ | metabolic rate |
+| $T$ | Temperature in Kelvin |
+| $T_0$ | Kelvin equivalent of $0 ^\circ \text{C} $|
+| $T^\circ$ | Temprature in C |
+| $E_a$ | Activation energy in $eV$ |
+| $k$ | Boltzmann's constant $\approx 8.6 \times 10^{-5}$  in eV/K |
+| $A$ | Scaling coefficient |
+
+The Arrhenius equation is defined as
+
+$$y = A e^{-\frac{E_a}{kT}}$$
+Some re-writing noting that $T = T_0 + T^\circ$ yields
+
+$$y = Ae^{-\frac{E_a}{kT}} = Ae^{-\frac{E_a}{k}\frac{1}{T}} = Ae^{-(\frac{E_a}{k})(\frac{1}{T_0 + T^\circ})}$$
+we want to take advantage of the fact that by Taylor expansion
+
+$$\frac{T_0}{T_0 + T^\circ} \approx 1 - \frac{T^\circ}{T_0}$$
+and so we write
+
+$$y = Ae^{-(\frac{E_a}{k})(\frac{1}{T_0})(\frac{T_0}{T_0 + T^\circ})}$$
+meaning we can approximate as
+
+$$y = Ae^{-(\frac{E_a}{k})(\frac{1}{T_0})(1 - \frac{T^\circ}{T_0})}$$
+we then define
+
+$$\epsilon = \frac{kT_0}{E_a}$$
+and our rescaled dimensionless temperature
+
+$$\tau = \frac{T^\circ}{T_0}$$
+so that we can write 
+
+$$y = A e^{-(\frac{1}{\epsilon})(1 - \tau)} = A e^{(\frac{\tau - 1}{\epsilon})}$$
+since the $-1$ in the numerator acts a left shift in the exponential is this sufficient to yield
+
+$$Arr(T) \propto e^{\tau/k}$$
+
+??
