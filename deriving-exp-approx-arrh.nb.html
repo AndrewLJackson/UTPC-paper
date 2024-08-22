@@ -1814,13 +1814,39 @@ our rescaled dimensionless temperature</p>
 <p><span class="math display">\[\tau = \frac{T^\circ}{T_0}\]</span> so
 that we can write</p>
 <p><span class="math display">\[y = A e^{-(\frac{1}{\epsilon})(1 -
-\tau)} = A e^{(\frac{\tau - 1}{\epsilon})}\]</span> since the <span class="math inline">\(-1\)</span> in the numerator acts a left shift in
-the exponential is this sufficient to yield</p>
-<p><span class="math display">\[Arr(T) \propto e^{\tau/k}\]</span></p>
-<p>??</p>
+\tau)} = A e^{(\frac{\tau - 1}{\epsilon})}\]</span> <span class="math display">\[y = A e^{-1/\epsilon}e^{\tau/\epsilon}\]</span>
+<span class="math display">\[y = A_1e^{\tau/\epsilon}\]</span> which
+gives the approximation that at temperatures close to biologically
+relevant ones with the rescaling to consider <span class="math inline">\(\tau = T^\circ/T_0\)</span> the Arrenhius function
+resembles closely a simple exponential.</p>
+<p><span class="math display">\[Arr(T(\tau)) \propto
+e^{\tau/\epsilon}\]</span></p>
+<div id="recovering-the-parameters-of-the-original-arrhenius-equation" class="section level2">
+<h2>Recovering the parameters of the original Arrhenius equation</h2>
+<p>On a log-log plot and associated regression we can estimate <span class="math inline">\(A_1\)</span> and <span class="math inline">\(\epsilon\)</span> and hence we can recover the
+activation energy <span class="math inline">\(E_a\)</span> and scaling
+coefficient <span class="math inline">\(A\)</span> from the original
+Arrhenius equation.</p>
+<p><span class="math display">\[\log(y) = \beta_0 + \beta_1\tau\]</span>
+which is equivalent to</p>
+<p><span class="math display">\[\log(y) = \log(A_1) +
+(1/\epsilon)\tau\]</span></p>
+<p>and so the slope from the log-log regression gives</p>
+<p><span class="math display">\[\beta_1 = (1/\epsilon) =
+\frac{E_a}{kT_0}\]</span></p>
+<p>so that</p>
+<p><span class="math display">\[E_a = \beta_1kT_0\]</span></p>
+<p>and then the intercept</p>
+<p><span class="math display">\[\beta_0 = \log(A_1) =
+\log(Ae^{-1/\epsilon})\]</span></p>
+<p><span class="math display">\[Ae^{-1/\epsilon} = e^{\beta_0}\]</span>
+<span class="math display">\[A = \frac{e^{\beta_0}}{e^{-1/\epsilon}} =
+\frac{e^{\beta_0}}{e^{-E_a/kT_0}}\]</span> where <span class="math inline">\(E_a\)</span> is obtained from the slope of the
+log-log regression as above.</p>
 <!-- rnb-text-end -->
+</div>
 
-<div id="rmd-source-code">LS0tCnRpdGxlOiAiRGVyaXZhdGlvbiBvZiB0aGUgZXhwb25lbnRpYWwgYXBwcm94aW1hdGlvbiBmb3IgQXJyaGVuaXVzIGVxdWF0aW9uIgpvdXRwdXQ6IGh0bWxfbm90ZWJvb2sKLS0tCgoKRGVmaW5lIHN5bWJvbHMKCnwgU3ltYm9sIHwgRXhwbGFuYXRpb24gfAp8IC0tLS0tLSB8IC0tLS0tLS0tLS0tIHwKfCAkeSQgfCBtZXRhYm9saWMgcmF0ZSB8CnwgJFQkIHwgVGVtcGVyYXR1cmUgaW4gS2VsdmluIHwKfCAkVF8wJCB8IEtlbHZpbiBlcXVpdmFsZW50IG9mICQwIF5cY2lyYyBcdGV4dHtDfSAkfAp8ICRUXlxjaXJjJCB8IFRlbXByYXR1cmUgaW4gQyB8CnwgJEVfYSQgfCBBY3RpdmF0aW9uIGVuZXJneSBpbiAkZVYkIHwKfCAkayQgfCBCb2x0em1hbm4ncyBjb25zdGFudCAkXGFwcHJveCA4LjYgXHRpbWVzIDEwXnstNX0kICBpbiBlVi9LIHwKfCAkQSQgfCBTY2FsaW5nIGNvZWZmaWNpZW50IHwKClRoZSBBcnJoZW5pdXMgZXF1YXRpb24gaXMgZGVmaW5lZCBhcwoKJCR5ID0gQSBlXnstXGZyYWN7RV9hfXtrVH19JCQKU29tZSByZS13cml0aW5nIG5vdGluZyB0aGF0ICRUID0gVF8wICsgVF5cY2lyYyQgeWllbGRzCgokJHkgPSBBZV57LVxmcmFje0VfYX17a1R9fSA9IEFlXnstXGZyYWN7RV9hfXtrfVxmcmFjezF9e1R9fSA9IEFlXnstKFxmcmFje0VfYX17a30pKFxmcmFjezF9e1RfMCArIFReXGNpcmN9KX0kJAp3ZSB3YW50IHRvIHRha2UgYWR2YW50YWdlIG9mIHRoZSBmYWN0IHRoYXQgYnkgVGF5bG9yIGV4cGFuc2lvbgoKJCRcZnJhY3tUXzB9e1RfMCArIFReXGNpcmN9IFxhcHByb3ggMSAtIFxmcmFje1ReXGNpcmN9e1RfMH0kJAphbmQgc28gd2Ugd3JpdGUKCiQkeSA9IEFlXnstKFxmcmFje0VfYX17a30pKFxmcmFjezF9e1RfMH0pKFxmcmFje1RfMH17VF8wICsgVF5cY2lyY30pfSQkCm1lYW5pbmcgd2UgY2FuIGFwcHJveGltYXRlIGFzCgokJHkgPSBBZV57LShcZnJhY3tFX2F9e2t9KShcZnJhY3sxfXtUXzB9KSgxIC0gXGZyYWN7VF5cY2lyY317VF8wfSl9JCQKd2UgdGhlbiBkZWZpbmUKCiQkXGVwc2lsb24gPSBcZnJhY3trVF8wfXtFX2F9JCQKYW5kIG91ciByZXNjYWxlZCBkaW1lbnNpb25sZXNzIHRlbXBlcmF0dXJlCgokJFx0YXUgPSBcZnJhY3tUXlxjaXJjfXtUXzB9JCQKc28gdGhhdCB3ZSBjYW4gd3JpdGUgCgokJHkgPSBBIGVeey0oXGZyYWN7MX17XGVwc2lsb259KSgxIC0gXHRhdSl9ID0gQSBlXnsoXGZyYWN7XHRhdSAtIDF9e1xlcHNpbG9ufSl9JCQKc2luY2UgdGhlICQtMSQgaW4gdGhlIG51bWVyYXRvciBhY3RzIGEgbGVmdCBzaGlmdCBpbiB0aGUgZXhwb25lbnRpYWwgaXMgdGhpcyBzdWZmaWNpZW50IHRvIHlpZWxkCgokJEFycihUKSBccHJvcHRvIGVee1x0YXUva30kJAoKPz8=</div>
+<div id="rmd-source-code">LS0tCnRpdGxlOiAiRGVyaXZhdGlvbiBvZiB0aGUgZXhwb25lbnRpYWwgYXBwcm94aW1hdGlvbiBmb3IgQXJyaGVuaXVzIGVxdWF0aW9uIgpvdXRwdXQ6IGh0bWxfbm90ZWJvb2sKLS0tCgoKRGVmaW5lIHN5bWJvbHMKCnwgU3ltYm9sIHwgRXhwbGFuYXRpb24gfAp8IC0tLS0tLSB8IC0tLS0tLS0tLS0tIHwKfCAkeSQgfCBtZXRhYm9saWMgcmF0ZSB8CnwgJFQkIHwgVGVtcGVyYXR1cmUgaW4gS2VsdmluIHwKfCAkVF8wJCB8IEtlbHZpbiBlcXVpdmFsZW50IG9mICQwIF5cY2lyYyBcdGV4dHtDfSAkfAp8ICRUXlxjaXJjJCB8IFRlbXByYXR1cmUgaW4gQyB8CnwgJEVfYSQgfCBBY3RpdmF0aW9uIGVuZXJneSBpbiAkZVYkIHwKfCAkayQgfCBCb2x0em1hbm4ncyBjb25zdGFudCAkXGFwcHJveCA4LjYgXHRpbWVzIDEwXnstNX0kICBpbiBlVi9LIHwKfCAkQSQgfCBTY2FsaW5nIGNvZWZmaWNpZW50IHwKClRoZSBBcnJoZW5pdXMgZXF1YXRpb24gaXMgZGVmaW5lZCBhcwoKJCR5ID0gQSBlXnstXGZyYWN7RV9hfXtrVH19JCQKU29tZSByZS13cml0aW5nIG5vdGluZyB0aGF0ICRUID0gVF8wICsgVF5cY2lyYyQgeWllbGRzCgokJHkgPSBBZV57LVxmcmFje0VfYX17a1R9fSA9IEFlXnstXGZyYWN7RV9hfXtrfVxmcmFjezF9e1R9fSA9IEFlXnstKFxmcmFje0VfYX17a30pKFxmcmFjezF9e1RfMCArIFReXGNpcmN9KX0kJAp3ZSB3YW50IHRvIHRha2UgYWR2YW50YWdlIG9mIHRoZSBmYWN0IHRoYXQgYnkgVGF5bG9yIGV4cGFuc2lvbgoKJCRcZnJhY3tUXzB9e1RfMCArIFReXGNpcmN9IFxhcHByb3ggMSAtIFxmcmFje1ReXGNpcmN9e1RfMH0kJAphbmQgc28gd2Ugd3JpdGUKCiQkeSA9IEFlXnstKFxmcmFje0VfYX17a30pKFxmcmFjezF9e1RfMH0pKFxmcmFje1RfMH17VF8wICsgVF5cY2lyY30pfSQkCm1lYW5pbmcgd2UgY2FuIGFwcHJveGltYXRlIGFzCgokJHkgPSBBZV57LShcZnJhY3tFX2F9e2t9KShcZnJhY3sxfXtUXzB9KSgxIC0gXGZyYWN7VF5cY2lyY317VF8wfSl9JCQKd2UgdGhlbiBkZWZpbmUKCiQkXGVwc2lsb24gPSBcZnJhY3trVF8wfXtFX2F9JCQKYW5kIG91ciByZXNjYWxlZCBkaW1lbnNpb25sZXNzIHRlbXBlcmF0dXJlCgokJFx0YXUgPSBcZnJhY3tUXlxjaXJjfXtUXzB9JCQKc28gdGhhdCB3ZSBjYW4gd3JpdGUgCgokJHkgPSBBIGVeey0oXGZyYWN7MX17XGVwc2lsb259KSgxIC0gXHRhdSl9ID0gQSBlXnsoXGZyYWN7XHRhdSAtIDF9e1xlcHNpbG9ufSl9JCQKJCR5ID0gQSBlXnstMS9cZXBzaWxvbn1lXntcdGF1L1xlcHNpbG9ufSQkCiQkeSA9IEFfMWVee1x0YXUvXGVwc2lsb259JCQKd2hpY2ggZ2l2ZXMgdGhlIGFwcHJveGltYXRpb24gdGhhdCBhdCB0ZW1wZXJhdHVyZXMgY2xvc2UgdG8gYmlvbG9naWNhbGx5IHJlbGV2YW50IG9uZXMgd2l0aCB0aGUgcmVzY2FsaW5nIHRvIGNvbnNpZGVyICRcdGF1ID0gVF5cY2lyYy9UXzAkIHRoZSBBcnJlbmhpdXMgZnVuY3Rpb24gcmVzZW1ibGVzIGNsb3NlbHkgYSBzaW1wbGUgZXhwb25lbnRpYWwuCgokJEFycihUKFx0YXUpKSBccHJvcHRvIGVee1x0YXUvXGVwc2lsb259JCQKCiMjIFJlY292ZXJpbmcgdGhlIHBhcmFtZXRlcnMgb2YgdGhlIG9yaWdpbmFsIEFycmhlbml1cyBlcXVhdGlvbgoKT24gYSBsb2ctbG9nIHBsb3QgYW5kIGFzc29jaWF0ZWQgcmVncmVzc2lvbiB3ZSBjYW4gZXN0aW1hdGUgJEFfMSQgYW5kICRcZXBzaWxvbiQgYW5kIGhlbmNlIHdlIGNhbiByZWNvdmVyIHRoZSBhY3RpdmF0aW9uIGVuZXJneSAkRV9hJCBhbmQgc2NhbGluZyBjb2VmZmljaWVudCAkQSQgZnJvbSB0aGUgb3JpZ2luYWwgQXJyaGVuaXVzIGVxdWF0aW9uLgoKJCRcbG9nKHkpID0gXGJldGFfMCArIFxiZXRhXzFcdGF1JCQKd2hpY2ggaXMgZXF1aXZhbGVudCB0bwoKJCRcbG9nKHkpID0gXGxvZyhBXzEpICsgKDEvXGVwc2lsb24pXHRhdSQkCgphbmQgc28gdGhlIHNsb3BlIGZyb20gdGhlIGxvZy1sb2cgcmVncmVzc2lvbiBnaXZlcwoKJCRcYmV0YV8xID0gKDEvXGVwc2lsb24pID0gXGZyYWN7RV9hfXtrVF8wfSQkCgpzbyB0aGF0IAoKJCRFX2EgPSBcYmV0YV8xa1RfMCQkCgphbmQgdGhlbiB0aGUgaW50ZXJjZXB0CgokJFxiZXRhXzAgPSBcbG9nKEFfMSkgPSBcbG9nKEFlXnstMS9cZXBzaWxvbn0pJCQKCiQkQWVeey0xL1xlcHNpbG9ufSA9IGVee1xiZXRhXzB9JCQKJCRBID0gXGZyYWN7ZV57XGJldGFfMH19e2Veey0xL1xlcHNpbG9ufX0gPSBcZnJhY3tlXntcYmV0YV8wfX17ZV57LUVfYS9rVF8wfX0kJAp3aGVyZSAkRV9hJCBpcyBvYnRhaW5lZCBmcm9tIHRoZSBzbG9wZSBvZiB0aGUgbG9nLWxvZyByZWdyZXNzaW9uIGFzIGFib3ZlLgo=</div>
 
 
 

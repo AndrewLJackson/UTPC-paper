@@ -40,8 +40,33 @@ $$\tau = \frac{T^\circ}{T_0}$$
 so that we can write 
 
 $$y = A e^{-(\frac{1}{\epsilon})(1 - \tau)} = A e^{(\frac{\tau - 1}{\epsilon})}$$
-since the $-1$ in the numerator acts a left shift in the exponential is this sufficient to yield
+$$y = A e^{-1/\epsilon}e^{\tau/\epsilon}$$
+$$y = A_1e^{\tau/\epsilon}$$
+which gives the approximation that at temperatures close to biologically relevant ones with the rescaling to consider $\tau = T^\circ/T_0$ the Arrenhius function resembles closely a simple exponential.
 
-$$Arr(T) \propto e^{\tau/k}$$
+$$Arr(T(\tau)) \propto e^{\tau/\epsilon}$$
 
-??
+## Recovering the parameters of the original Arrhenius equation
+
+On a log-log plot and associated regression we can estimate $A_1$ and $\epsilon$ and hence we can recover the activation energy $E_a$ and scaling coefficient $A$ from the original Arrhenius equation.
+
+$$\log(y) = \beta_0 + \beta_1\tau$$
+which is equivalent to
+
+$$\log(y) = \log(A_1) + (1/\epsilon)\tau$$
+
+and so the slope from the log-log regression gives
+
+$$\beta_1 = (1/\epsilon) = \frac{E_a}{kT_0}$$
+
+so that 
+
+$$E_a = \beta_1kT_0$$
+
+and then the intercept
+
+$$\beta_0 = \log(A_1) = \log(Ae^{-1/\epsilon})$$
+
+$$Ae^{-1/\epsilon} = e^{\beta_0}$$
+$$A = \frac{e^{\beta_0}}{e^{-1/\epsilon}} = \frac{e^{\beta_0}}{e^{-E_a/kT_0}}$$
+where $E_a$ is obtained from the slope of the log-log regression as above.
