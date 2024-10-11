@@ -120,16 +120,20 @@ We optimise on the least squares of the rescaled data to the universal thermal p
 
 # define our fitness function which is the sum of squares of 
 # the predicted - observed
-tpc_fit <- function(x, pf, ta){
+tpc_fit_scale_shape <- function(x, pf, ta){
   
   # extract the parameters
-  yopt  <- x[1] # the value of y at the optimum
-  Topt  <- x[2] # the optimal temperature
-  Delta <- x[3] # the difference between Tc-Topt
-  Tc    <- Topt + Delta # calculate Tc
+  # yopt  <- x[1] # the value of y at the optimum
+  # Topt  <- x[2] # the optimal temperature
+  # Delta <- x[3] # the difference between Tc-Topt
+  # Tc    <- Topt + Delta # calculate Tc
   
   # sum of squares
-  sum(((yopt * exp( (ta - Topt) / Delta) * (1 - (ta - Topt)/Delta)) - pf) ^ 2)
+  # sum(((yopt * exp( (ta - Topt) / Delta) * (1 - (ta - Topt)/Delta)) - pf) ^ 2)
+  xx <- x[1] * (ta - x[2]) 
+  yy <- x[3] * (pf - x[4])
+    
+  sum( ( yy - (1 - xx) * exp(xx) ) ^ 2 )
   
   
 }
@@ -138,19 +142,21 @@ tpc_fit <- function(x, pf, ta){
 get_inits <- function(x){
   
   # initialise the initial parameter value vector
-  inits <- c(NA, NA, NA)
+  inits <- c(NA, NA, NA, NA)
   
   # find the largest performance
-  idx_max_y <- which.max(x$pf)
+  # idx_max_y <- which.max(x$pf)
   
   # the largest y value is a good guess for yopt
-  inits[1] <- x$pf[idx_max_y]
+  inits[1] <- 1
   
   # the corresponding temerature is a good guess for Topt
-  inits[2] <- x$ta[idx_max_y]
+  inits[2] <- 0
   
   # use the largest T value as a simple guess for Delta
-  inits[3] <-tail(x$ta,1) - inits[2]
+  inits[3] <- 1
+  
+  inits[4] <- 0
   
   # return the initial values
   return(inits)
@@ -166,18 +172,22 @@ do_tpc_fit <- function(x){
   
   # call the optimiser
   fit <- optim(get_inits(x), 
-               tpc_fit,
+               tpc_fit_scale_shape,
                pf = x$pf, 
                ta = x$ta,
                method = "L-BFGS-B",
-               lower = c(0.001, 0.001, 1), 
-               upper = Inf)
+               lower = c(0.001, -50, 0.001, -50), 
+               upper = c(Inf, 50, Inf, 50))
   
   # return a tibble (data.frame)
   return(x %<>% mutate(u_yopt  = fit$par[1],
                        u_Topt  = fit$par[2],
-                       u_Delta = fit$par[3],
-                       u_Tc    = fit$par[2] + fit$par[3])
+                       u_Delta = 1 / fit$par[1],
+                       u_Tc    = (1 / fit$par[1]) + fit$par[2],
+                       x1 = fit$par[1], 
+                       x2 = fit$par[2], 
+                       x3 = fit$par[3], 
+                       x4 = fit$par[4])
          )
 
   
@@ -198,7 +208,7 @@ combined_dat_params %<>%
 
 ## save this object to file
 save(combined_dat_params, 
-     file = "output/combined_dat_params.rda", 
+     file = "output/combined_dat_params_shape_and_scale.rda", 
      compress = "xz")
 
 
@@ -207,3 +217,36 @@ save(combined_dat_params,
 ### References
 
 Rezende, E. L. & Bozinovic, F. 2019. Thermal performance across levels of biological organization. Philosophical Transactions of the Royal Society B 374, 20180549.
+
+## Andrew Testing new model fit
+
+```{r}
+
+aj <- combined_dat_params
+
+aj %<>% mutate(y_i_dat = x3 * (pf - x4),
+               x_i_dat =  x1 * (ta - x2) )
+
+
+```
+
+
+```{r}
+
+dd_utpc <- data.frame(x = seq(-50, 1, length.out = 100))
+dd_utpc %<>% mutate(y = (1-x) * exp(x))
+
+gg1 <- ggplot(data = aj, mapping = aes(x = x_i_dat, 
+                                       y = y_i_dat)) + 
+  geom_point() + 
+  facet_wrap(vars(type)) + 
+  geom_line(data = dd_utpc, 
+            mapping = aes(x = x, y = y), 
+            colour = "red")
+  # geom_function(fun = function(x) pmax((1-x) * exp(x), 0), 
+  #               col = "red") + 
+  # ylim(0, 10)
+
+print(gg1)
+```
+

@@ -201,9 +201,45 @@ save(combined_dat_params,
      file = "output/combined_dat_params.rda", 
      compress = "xz")
 
+## write to file
+write.csv(combined_dat_params, 
+          file = "data_for_JF.csv", 
+          row.names = FALSE)
 
 ```
 
 ### References
 
 Rezende, E. L. & Bozinovic, F. 2019. Thermal performance across levels of biological organization. Philosophical Transactions of the Royal Society B 374, 20180549.
+
+## Andrew Testing new model fit
+
+```{r}
+
+aj <- combined_dat_params
+
+aj %<>% mutate(y_i_dat = pf / u_yopt,
+               x_i_dat = (ta - u_Topt) / u_Delta )
+
+
+```
+
+
+```{r}
+
+dd_utpc <- data.frame(x = seq(-5, 1, length.out = 100))
+dd_utpc %<>% mutate(y = (1-x) * exp(x))
+
+gg1 <- ggplot(data = aj, mapping = aes(x = x_i_dat, 
+                                       y = y_i_dat)) + 
+  geom_point() + 
+  facet_wrap(vars(type)) + 
+  geom_line(data = dd_utpc, 
+            mapping = aes(x = x, y = y), 
+            colour = "red")
+  # geom_function(fun = function(x) pmax((1-x) * exp(x), 0), 
+  #               col = "red") + 
+  # ylim(0, 10)
+
+print(gg1)
+```
