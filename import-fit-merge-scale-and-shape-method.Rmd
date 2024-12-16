@@ -130,10 +130,13 @@ tpc_fit_scale_shape <- function(x, pf, ta){
   
   # sum of squares
   # sum(((yopt * exp( (ta - Topt) / Delta) * (1 - (ta - Topt)/Delta)) - pf) ^ 2)
-  xx <- x[1] * (ta - x[2]) 
-  yy <- x[3] * (pf - x[4])
+  # xx <- x[1] * (ta - x[2]) 
+  # yy <- x[3] * (pf - x[4])
+  
+  xx <- (ta - x[1]) / x[2]
+  fx <- (1-xx)*exp(xx)
     
-  sum( ( yy - (1 - xx) * exp(xx) ) ^ 2 )
+  sum( ( pf - x[4] - x[3] * fx ) ^ 2 )
   
   
 }
@@ -145,21 +148,32 @@ get_inits <- function(x){
   inits <- c(NA, NA, NA, NA)
   
   # find the largest performance
-  # idx_max_y <- which.max(x$pf)
-  
-  # the largest y value is a good guess for yopt
-  inits[1] <- 1
+  idx_max_y <- which.max(x$pf)
   
   # the corresponding temerature is a good guess for Topt
-  inits[2] <- 0
+  inits[1] <- x$ta[idx_max_y]
   
-  # use the largest T value as a simple guess for Delta
-  inits[3] <- 1
+  # use the largest T value - Topt as a simple guess for Delta
+  inits[2] <- max(c( max(x$ta) - inits[1], 5) )
   
+  # the largest y value is a good guess for yopt
+  inits[3] <- x$pf[idx_max_y]
+  
+  # offset for y
   inits[4] <- 0
   
   # return the initial values
   return(inits)
+}
+
+# get lower value bounds based on initial parameter values
+get_lwr <- function(x){
+  c(0.1*x[1]-5, 0.1*x[2], 0.1*x[3], -0.2*x[3])
+}
+
+# get upper value bounds based on initial parameter values
+get_upp <- function(x){
+  c(10*x[1]+5, 10*x[2], 10*x[3], 0.2*x[3])
 }
 
 
@@ -170,20 +184,22 @@ get_inits <- function(x){
 # prefix "u_"
 do_tpc_fit <- function(x){
   
+  x0 <- get_inits(x)
+  
   # call the optimiser
-  fit <- optim(get_inits(x), 
+  fit <- optim(x0, 
                tpc_fit_scale_shape,
                pf = x$pf, 
                ta = x$ta,
                method = "L-BFGS-B",
-               lower = c(0.001, -50, 0.001, -50), 
-               upper = c(Inf, 50, Inf, 50))
+               lower = get_lwr(x0), 
+               upper = get_upp(x0))
   
   # return a tibble (data.frame)
-  return(x %<>% mutate(u_yopt  = fit$par[1],
-                       u_Topt  = fit$par[2],
-                       u_Delta = 1 / fit$par[1],
-                       u_Tc    = (1 / fit$par[1]) + fit$par[2],
+  return(x %<>% mutate(u_yopt  = NA,
+                       u_Topt  = NA,
+                       u_Delta = NA,
+                       u_Tc    = NA,
                        x1 = fit$par[1], 
                        x2 = fit$par[2], 
                        x3 = fit$par[3], 
@@ -201,18 +217,29 @@ do_tpc_fit <- function(x){
 # split the data on "code" variable and map our optimiser over all
 # the possibly() function acts as an error catcher, and then rebind it 
 # into a single tibble again on completion.
-combined_dat_params %<>% 
+combined_dat_params_2 <- combined_dat_params %>% 
   split(.$code) %>% 
   map(~possibly(do_tpc_fit, otherwise = 'error here')(.x)) %>%
   bind_rows()
 
 ## save this object to file
-save(combined_dat_params, 
+save(combined_dat_params_2, 
      file = "output/combined_dat_params_shape_and_scale.rda", 
      compress = "xz")
 
 
 ```
+
+### testing the loop
+
+```{r}
+
+ww <- combined_dat_params %>% split(.$code)
+
+qq <- do_tpc_fit(ww[[1]])
+
+```
+
 
 ### References
 
@@ -222,10 +249,10 @@ Rezende, E. L. & Bozinovic, F. 2019. Thermal performance across levels of biolog
 
 ```{r}
 
-aj <- combined_dat_params
+aj <- combined_dat_params_2
 
-aj %<>% mutate(y_i_dat = x3 * (pf - x4),
-               x_i_dat =  x1 * (ta - x2) )
+aj %<>% mutate(y_i_dat = (pf - x4) / x3,
+               x_i_dat =  (ta - x1) / x2 )
 
 
 ```
@@ -233,18 +260,18 @@ aj %<>% mutate(y_i_dat = x3 * (pf - x4),
 
 ```{r}
 
-dd_utpc <- data.frame(x = seq(-50, 1, length.out = 100))
+dd_utpc <- data.frame(x = seq(-5, 1, length.out = 100))
 dd_utpc %<>% mutate(y = (1-x) * exp(x))
 
 gg1 <- ggplot(data = aj, mapping = aes(x = x_i_dat, 
                                        y = y_i_dat)) + 
   geom_point() + 
   facet_wrap(vars(type)) + 
-  geom_line(data = dd_utpc, 
-            mapping = aes(x = x, y = y), 
-            colour = "red")
-  # geom_function(fun = function(x) pmax((1-x) * exp(x), 0), 
-  #               col = "red") + 
+  # geom_line(data = dd_utpc, 
+  #           mapping = aes(x = x, y = y), 
+  #           colour = "red")
+  geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
+                col = "red")
   # ylim(0, 10)
 
 print(gg1)
