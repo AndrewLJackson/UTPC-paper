@@ -249,8 +249,17 @@ Process the raw data along with the fitted parameters for plotting.
 
 ```{r}
 
+# AJ - note that the new object is called combined_dat_params_2 that contains
+# the raw data and the model fits from the new shape and scale UTPC model.
 # load the raw data and estimates parameters
 load("output/combined_dat_params_shape_and_scale.rda")
+
+## AJ not sure if this is needed? But i am not sure where the objects
+## photo, run, pop or fitted are being loaded from in the code below.
+# extract the 3 experiment types
+# photo <- combined_dat_params_2 %>% filter(type == "pho")
+# run <- combined_dat_params_2 %>% filter(type == "run")
+# pop <- combined_dat_params_2 %>% filter(type == "pop")
 
 ```
 

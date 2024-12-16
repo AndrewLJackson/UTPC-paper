@@ -122,20 +122,13 @@ We optimise on the least squares of the rescaled data to the universal thermal p
 # the predicted - observed
 tpc_fit_scale_shape <- function(x, pf, ta){
   
-  # extract the parameters
-  # yopt  <- x[1] # the value of y at the optimum
-  # Topt  <- x[2] # the optimal temperature
-  # Delta <- x[3] # the difference between Tc-Topt
-  # Tc    <- Topt + Delta # calculate Tc
-  
-  # sum of squares
-  # sum(((yopt * exp( (ta - Topt) / Delta) * (1 - (ta - Topt)/Delta)) - pf) ^ 2)
-  # xx <- x[1] * (ta - x[2]) 
-  # yy <- x[3] * (pf - x[4])
-  
+  # rescale the temperature data
   xx <- (ta - x[1]) / x[2]
+  
+  # calculate the UTPC
   fx <- (1-xx)*exp(xx)
-    
+  
+  # compare the performance data with the scaled UTPC
   sum( ( pf - x[4] - x[3] * fx ) ^ 2 )
   
   
@@ -230,28 +223,17 @@ save(combined_dat_params_2,
 
 ```
 
-### testing the loop
-
-```{r}
-
-ww <- combined_dat_params %>% split(.$code)
-
-qq <- do_tpc_fit(ww[[1]])
-
-```
-
 
 ### References
 
 Rezende, E. L. & Bozinovic, F. 2019. Thermal performance across levels of biological organization. Philosophical Transactions of the Royal Society B 374, 20180549.
 
-## Andrew Testing new model fit
+## Visualise model Fit
 
 ```{r}
 
-aj <- combined_dat_params_2
-
-aj %<>% mutate(y_i_dat = (pf - x4) / x3,
+# Resecale the temperature and performance data according to the model fit
+combined_dat_params_2 %<>% mutate(y_i_dat = (pf - x4) / x3,
                x_i_dat =  (ta - x1) / x2 )
 
 
@@ -260,19 +242,22 @@ aj %<>% mutate(y_i_dat = (pf - x4) / x3,
 
 ```{r}
 
+# Create a data frame to use for plotting the UTPC function over its range
 dd_utpc <- data.frame(x = seq(-5, 1, length.out = 100))
 dd_utpc %<>% mutate(y = (1-x) * exp(x))
 
-gg1 <- ggplot(data = aj, mapping = aes(x = x_i_dat, 
+# Plot the rescaled data and the UTPC
+gg1 <- ggplot(data = combined_dat_params_2, 
+              mapping = aes(x = x_i_dat, 
                                        y = y_i_dat)) + 
   geom_point() + 
   facet_wrap(vars(type)) + 
-  # geom_line(data = dd_utpc, 
-  #           mapping = aes(x = x, y = y), 
-  #           colour = "red")
-  geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
-                col = "red")
-  # ylim(0, 10)
+  geom_line(data = dd_utpc,
+            mapping = aes(x = x, y = y),
+            colour = "red") + 
+  # geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
+  #               col = "red") + 
+  xlim(-6, 2)
 
 print(gg1)
 ```
