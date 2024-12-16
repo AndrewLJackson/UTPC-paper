@@ -6,6 +6,13 @@
 .RData
 .RDataTmp
 
+# Data files in case they are preventing sync
+*.Rda
+*.rda
+
+# html files in case they are preventing sync
+*.html
+
 # User-specific files
 .Ruserdata
 
@@ -49,4 +56,4 @@ po/*~
 rsconnect/
 
 # OSX
-.DS_Store
+*.DS_Store
