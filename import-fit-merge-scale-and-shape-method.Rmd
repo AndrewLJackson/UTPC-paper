@@ -262,3 +262,87 @@ gg1 <- ggplot(data = combined_dat_params_2,
 print(gg1)
 ```
 
+## Test on TPCs with negative values
+
+Test on a strictly positive TPC.
+
+```{r}
+
+
+
+
+# extract the first photosynthesis dataset
+test1 <- run %>% filter(code == "st")
+
+test1_fit <- do_tpc_fit(test1)
+
+
+UTPC <- data.frame(x = seq(-6, 1, length.out = 100)) %>%
+  mutate(y = (1-x)*exp(x)) %>%
+  mutate(ta = (x * test1_fit$x2[1]) + test1_fit$x1[1], 
+         pf = (y * test1_fit$x3[1]) + test1_fit$x4[1]
+) 
+
+gg_test1 <- ggplot(data = test1_fit, 
+                   mapping = aes(x = ta, y = pf)) + 
+  geom_point() + 
+  geom_line(data = UTPC)
+
+print(gg_test1)
+
+```
+
+Test on the same TPC that is shifted slightly downwards so it includes some negative performance values at either end.
+
+```{r}
+
+
+# extract the first photosynthesis dataset
+test2 <- run %>% filter(code == "st") %>%
+  mutate(pf = pf - quantile(pf, probs = 0.25))
+
+test2_fit <- do_tpc_fit(test2)
+
+
+UTPC <- data.frame(x = seq(-6, 1, length.out = 100)) %>%
+  mutate(y = (1-x)*exp(x)) %>%
+  mutate(ta = (x * test2_fit$x2[1]) + test2_fit$x1[1], 
+         pf = (y * test2_fit$x3[1]) + test2_fit$x4[1]
+) 
+
+gg_test2 <- ggplot(data = test2_fit, 
+                   mapping = aes(x = ta, y = pf)) + 
+  geom_point() + 
+  geom_line(data = UTPC)
+
+print(gg_test2)
+```
+
+Test on an inverted TPC
+
+```{r}
+
+# extract the first photosynthesis dataset
+test3 <- run %>% filter(code == "st") %>%
+  mutate(pf = 2 - pf)
+
+test3_fit <- do_tpc_fit(test3)
+
+
+UTPC <- data.frame(x = seq(-6, 1, length.out = 100)) %>%
+  mutate(y = (1-x)*exp(x)) %>%
+  mutate(ta = (x * test3_fit$x2[1]) + test3_fit$x1[1], 
+         pf = (y * test3_fit$x3[1]) + test3_fit$x4[1]
+) 
+
+gg_test3 <- ggplot(data = test3_fit, 
+                   mapping = aes(x = ta, y = pf)) + 
+  geom_point() 
+  # geom_line(data = UTPC)
+
+print(gg_test3)
+
+
+```
+
+
