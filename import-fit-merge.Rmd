@@ -183,6 +183,33 @@ do_tpc_fit <- function(x){
   
 }
 
+
+# this function takes a fitted UTPC model and scales the data to the 
+# UTPC. Returns a data.frame the same as the original data.frame
+# with new columns for 
+# scaled performance pf_utpc 
+# and scaled temperature ta_utpc
+data2utpc <- function(dd){
+  dd %<>% mutate(pf_utpc = pf / u_yopt,
+                ta_utpc = (ta - u_Topt) / u_Delta
+                )
+  return(dd)
+}
+
+# This function scales the UTPC curve to the original data based on 
+# the fitted UTPC model. Returns a new data.frame with n values of 
+# the UTPC function evaluated and rescaled to the data provied in dd.
+# Performance can be adjusted according by subtracting the value given in 
+# p_adj, and would typically be used to allow for negative performance values
+# in the data. 
+utpc2data <- function(dd, y_adj = 0, n = 100){
+  UTPC <- data.frame(x = seq(-4, 1, length.out = n)) %>%
+  mutate(y = (1-x)*exp(x)) %>%
+  mutate(ta = (x * dd$u_Delta[1]) + dd$u_Topt[1],
+         pf = (y * dd$u_yopt[1] - y_adj)
+)
+  return(UTPC)
+}
 ```
 
 ### Map over all the data
@@ -212,14 +239,11 @@ write.csv(combined_dat_params,
 
 Rezende, E. L. & Bozinovic, F. 2019. Thermal performance across levels of biological organization. Philosophical Transactions of the Royal Society B 374, 20180549.
 
-## Andrew Testing new model fit
+## Visualise the UTPC on all data
 
 ```{r}
 
-aj <- combined_dat_params
-
-aj %<>% mutate(y_i_dat = pf / u_yopt,
-               x_i_dat = (ta - u_Topt) / u_Delta )
+dd_utpc <- data2utpc(combined_dat_params)
 
 
 ```
@@ -227,19 +251,47 @@ aj %<>% mutate(y_i_dat = pf / u_yopt,
 
 ```{r}
 
-dd_utpc <- data.frame(x = seq(-5, 1, length.out = 100))
-dd_utpc %<>% mutate(y = (1-x) * exp(x))
-
-gg1 <- ggplot(data = aj, mapping = aes(x = x_i_dat, 
-                                       y = y_i_dat)) + 
+gg1 <- ggplot(data = dd_utpc, mapping = aes(x = ta_utpc, 
+                                       y = pf_utpc)) + 
   geom_point() + 
   facet_wrap(vars(type)) + 
-  geom_line(data = dd_utpc, 
-            mapping = aes(x = x, y = y), 
-            colour = "red")
-  # geom_function(fun = function(x) pmax((1-x) * exp(x), 0), 
-  #               col = "red") + 
+  geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
+                col = "red")
   # ylim(0, 10)
 
 print(gg1)
 ```
+
+## Illustration of fitting UTPC to a performance curve with negative values
+
+There are instances where not all performance values are strictly positive. This can occur for example in studies of population growth rates with temperature, where negative values indicate a declining population. The approach that shoudl be taken in these cases is to add an arbitrary amount to the performance values to ensure all data points are strictly positive, fit the UTPC model and then readjust both the data and the UTPC by the same amount. 
+
+```{r}
+
+
+# extract the first photosynthesis dataset
+test2 <- run %>% filter(code == "st") %>%
+  mutate(pf = pf - quantile(pf, probs = 0.25))
+
+# add an arbitrary amount to the performance data to ensure they are 
+# positive values. 
+y_adj <- 1
+
+# fit the utpc model after adjusting the performance data, and then 
+# transform it back. 
+test2_fit <- do_tpc_fit(test2 %>% mutate(pf = pf + y_adj)) %>% 
+  mutate(pf = pf - y_adj)
+
+# generate a UTPC on the same scale as the original data.
+UTPC <- utpc2data(test2_fit, y_adj = y_adj)
+
+
+# plot the raw data and the UTPC on the same scale
+gg_test2 <- ggplot(data = test2_fit,
+                   mapping = aes(x = ta, y = pf)) +
+  geom_point() + 
+  geom_line(data = UTPC, color = "red")
+
+print(gg_test2)
+```
+
