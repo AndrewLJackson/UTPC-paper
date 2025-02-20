@@ -10,11 +10,12 @@ Define symbols
 | ------ | ----------- |
 | $y$ | metabolic rate |
 | $T$ | Temperature in Kelvin |
-| $T_0$ | Kelvin equivalent of $0 ^\circ \text{C} $|
-| $T^\circ$ | Temprature in C |
+| $T_0$ | Kelvin equivalent of $0 ^ \circ \text{C}$ |
+| $T^\circ$ | Temperature in C |
 | $E_a$ | Activation energy in $eV$ |
 | $k$ | Boltzmann's constant $\approx 8.6 \times 10^{-5}$  in eV/K |
 | $A$ | Scaling coefficient |
+
 
 The Arrhenius equation is defined as
 
