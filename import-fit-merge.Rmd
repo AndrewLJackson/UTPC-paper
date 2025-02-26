@@ -262,41 +262,4 @@ gg1 <- ggplot(data = dd_utpc, mapping = aes(x = ta_utpc,
 print(gg1)
 ```
 
-## Illustration of fitting UTPC to a performance curve with negative values
-
-There are instances where not all performance values are strictly positive. This can occur for example in studies of population growth rates with temperature, where negative values indicate a declining population. The approach that shoudl be taken in these cases is to add an arbitrary amount to the performance values to ensure all data points are strictly positive, fit the UTPC model and then readjust both the data and the UTPC by the same amount. 
-
-```{r}
-
-
-# This example is the first photosynthesis dataset which we force to have 
-# negative performance values by substracting 0.25 from the pf vector.
-test2 <- data.frame(ta = c(2.9, 9.7, 15.3, 20.4, 25.5, 
-                           30.5, 34.9, 37.3, 39.3),
-                    pf = c(0, 0.24, 0.67, 0.93, 1.17, 
-                           1.42, 1.49, 0.94, 0) - 0.25)
-  # 
-  # run %>% filter(code == "st") %>%
-  # mutate(pf = pf - quantile(pf, probs = 0.25))
-
-# First we add an arbitrary amount to the performance data to ensure they are 
-# positive values. 
-y_adj <- 1
-
-# fit the utpc model after adjusting the performance data, and then 
-# transform it back. 
-test2_fit <- do_tpc_fit(test2 %>% mutate(pf = pf + y_adj)) %>% 
-  mutate(pf = pf - y_adj)
-
-# generate a UTPC on the same scale as the original data.
-UTPC <- utpc2data(test2_fit, y_adj = y_adj)
-
-# plot the raw data and the UTPC on the same scale
-gg_test2 <- ggplot(data = test2_fit,
-                   mapping = aes(x = ta, y = pf)) +
-  geom_point() + 
-  geom_line(data = UTPC, color = "red")
-
-print(gg_test2)
-```
 
