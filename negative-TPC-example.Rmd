@@ -137,7 +137,9 @@ test2 <- data.frame(ta = c(2.9, 9.7, 15.3, 20.4, 25.5,
   # mutate(pf = pf - quantile(pf, probs = 0.25))
 
 # First we add an arbitrary amount to the performance data to ensure they are 
-# positive values. 
+# positive values. Here, we have looked at the data and decided to artibrarily 
+# add 1 to all pf values which is more than enough to ensure they are all 
+# positive. Alternatively one could use abs(min(pf)) as an automated way. 
 y_adj <- 1
 
 # fit the utpc model after adjusting the performance data, and then 
