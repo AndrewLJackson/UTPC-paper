@@ -56,4 +56,4 @@ po/*~
 rsconnect/
 
 # OSX
-*.DS_Store
+.DS_Store
