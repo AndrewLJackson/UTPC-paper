@@ -1,0 +1,313 @@
+---
+title: "Run UTPC on the big datasets"
+output: html_notebook
+---
+
+
+```{r setup}
+library(tidyverse)
+library(magrittr)
+library(readxl)
+library(patchwork)
+library(plotly)
+library(ggforce)
+```
+
+
+
+## Import the data
+
+
+```{r}
+
+big_dd <- read.csv("data/thermal_performance_datasets.csv") %>%
+  rename(type = `id`) %>%
+  select(-citation)
+
+```
+
+
+
+
+
+### Fit our own parameters using UTPC method
+
+We optimise on the least squares of the rescaled data to the universal thermal performance curve using the L-BFSG-U approach to bound the parameters. 
+
+```{r}
+
+# define our fitness function which is the sum of squares of 
+# the predicted - observed
+tpc_fit <- function(x, pf, ta){
+  
+  # extract the parameters
+  yopt  <- x[1] # the value of y at the optimum
+  Topt  <- x[2] # the optimal temperature
+  Delta <- x[3] # the difference between Tc-Topt
+  Tc    <- Topt + Delta # calculate Tc
+  
+  # sum of squares
+  sum(((yopt * exp( (ta - Topt) / Delta) * (1 - (ta - Topt)/Delta)) - pf) ^ 2)
+  
+  
+}
+
+# a function to find sensible initial values for the optimiser
+get_inits <- function(x){
+  
+  # initialise the initial parameter value vector
+  inits <- c(NA, NA, NA)
+  
+  # find the largest performance
+  idx_max_y <- which.max(x$pf)
+  
+  # the largest y value is a good guess for yopt
+  inits[1] <- x$pf[idx_max_y]
+  
+  # the corresponding temperature is a good guess for Topt
+  inits[2] <- x$ta[idx_max_y]
+  
+  # use the largest T value as a simple guess for Delta
+  inits[3] <-tail(x$ta[is.finite(x$ta)],1) - inits[2]
+  
+  # return the initial values
+  return(inits)
+}
+
+
+# a wrapper function to do the fit and return a data.frame
+# The object x coming in is a data.frame of the same structure
+# as the full dataset. The output is a tibble of the same structure
+# with columns appended for estimates of the universal TPC with 
+# prefix "u_"
+do_tpc_fit <- function(x){
+  
+  # call the optimiser
+  fit <- optim(get_inits(x), 
+               tpc_fit,
+               pf = x$pf, 
+               ta = x$ta,
+               method = "L-BFGS-B",
+               lower = c(0.2, 10^-3, 1), 
+               upper = c(10, 100, Inf))
+  
+  # return a tibble (data.frame)
+  return(x %<>% mutate(u_yopt  = fit$par[1],
+                       u_Topt  = fit$par[2],
+                       u_Delta = fit$par[3],
+                       u_Tc    = fit$par[2] + fit$par[3], 
+                       SS = fit$value)
+         )
+
+  
+}
+
+
+# this function takes a fitted UTPC model and scales the data to the 
+# UTPC. Returns a data.frame the same as the original data.frame
+# with new columns for 
+# scaled performance pf_utpc 
+# and scaled temperature ta_utpc
+data2utpc <- function(dd){
+  dd %<>% mutate(pf_utpc = pf / u_yopt,
+                ta_utpc = (ta - u_Topt) / u_Delta
+                )
+  return(dd)
+}
+
+# This function scales the UTPC curve to the original data based on 
+# the fitted UTPC model. Returns a new data.frame with n values of 
+# the UTPC function evaluated and rescaled to the data provied in dd.
+# Performance can be adjusted according by subtracting the value given in 
+# p_adj, and would typically be used to allow for negative performance values
+# in the data. 
+utpc2data <- function(dd, y_adj = 0, n = 100){
+  UTPC <- data.frame(x = seq(-4, 1, length.out = n)) %>%
+  mutate(y = (1-x)*exp(x)) %>%
+  mutate(ta = (x * dd$u_Delta[1]) + dd$u_Topt[1],
+         pf = (y * dd$u_yopt[1] - y_adj),
+         type = dd$type[1],
+         pf_max = dd$pf_max[1]
+)
+  return(UTPC)
+}
+```
+
+### Map over all the data
+
+```{r}
+# ph <- "Proteobacteria"
+
+# big_dd <- big_dd %>%
+#   filter(specific_trait_group == "population_growth_rate")
+
+# rescale performance data to be numbers closer to 1
+big_dd <- big_dd %>% group_by(type) %>% 
+  mutate(ta = temperature,
+         pf_max = max(trait_value),
+         pf = trait_value / pf_max)
+
+
+# split the data on "code" variable and map our optimiser over all
+# the possibly() function acts as an error catcher, and then rebind it 
+# into a single tibble again on completion.
+big_dd %<>% 
+  split(.$type) %>% 
+  map(~possibly(do_tpc_fit, otherwise = 'error here')(.x)) %>%
+  bind_rows()
+
+## save this object to file
+save(big_dd, 
+     file = "data/combined_dat_params.rda", 
+     compress = "xz")
+
+## write to file
+# write.csv(combined_dat_params, 
+#           file = "data_for_JF.csv", 
+#           row.names = FALSE)
+
+```
+
+
+## Visualise the UTPC on all data
+
+```{r}
+
+dd_utpc <- data2utpc(big_dd)
+
+aj <- big_dd %>% split(.$type) %>% map(utpc2data) %>% bind_rows()
+
+```
+
+separate panels by phylum
+
+```{r}
+
+# dd_utpc %>% split(.$phylum) %>% map()
+
+```
+
+
+```{r}
+
+gg1 <- ggplot(data = dd_utpc, mapping = aes(x = ta_utpc, 
+                                       y = pf_utpc)) + 
+  geom_point() + 
+  facet_wrap(vars(phylum), 
+             scales = "free_x") +
+  # ylim(0,1) + 
+  geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
+                col = "red")
+  # ylim(0, 10)
+
+print(gg1)
+```
+
+
+## Find the problematic fits
+
+
+UTPC transformed data. 
+
+NB plot only curves which have 
+
+```{r}
+g_focus_utpc <- ggplot(data = dd_utpc %>% 
+                         filter(u_yopt <= 2) %>%
+                      mutate(type = factor(type)), 
+                  mapping = aes(x = ta_utpc, y = pf_utpc)) + 
+  geom_point(size = 1, alpha = 0.1) + 
+  scale_color_viridis_d(guide="none") +
+  # scale_color_viridis_d() + 
+  geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
+                col = "red") + 
+  ylim(-1, 5) +
+  xlim(-6, 1.1) + 
+  theme_classic()
+  
+
+print(g_focus_utpc)
+```
+## Find the problem fits
+
+```{r}
+dd_alg <- dd_utpc %>% filter(u_yopt > 2)
+
+prbs <- unique(dd_alg$type)       
+
+prbs <- sort(unique(prbs))
+
+dd_prbs <- dd_utpc[dd_utpc$type %in% prbs,]
+
+
+utpc_prbs <- dd_prbs %>% split(.$type) %>% map(utpc2data) %>% bind_rows()
+
+
+```
+
+plot them
+
+```{r}
+
+tmp <- data.frame(u_Delta = 7, u_Topt = 42, u_yopt = 0.00073, 
+                  type = -999)
+
+tmp_utpc = utpc2data(tmp)
+
+
+g_raw_prbs <- ggplot(data = dd_prbs %>% 
+                        mutate(type = factor(type)), 
+                  mapping = aes(x = ta, y = pf / pf_max)) + 
+  geom_point() + 
+  geom_line() + 
+  geom_line(data = utpc_prbs %>%
+              mutate(type = factor(type)), linetype = 2) +
+  facet_wrap_paginate(vars(type), scales = "free", ncol = 5, nrow = 4, 
+                      page = 1)
+  # scale_color_viridis_d(guide="none")
+  # geom_line(data = tmp_utpc, color = "black")
+  
+  
+
+print(g_raw_prbs)
+
+```
+
+```{r}
+
+dd_prbs %>% group_by(type) %>%
+  summarise(u_Topt = u_Topt[1], u_yopt = u_yopt[1], pf_max = pf_max[1])
+
+```
+
+### Filter for the zeroes
+
+```{r}
+zero_fun <- function(x){ifelse(any(x == 0), 0, 1)}
+
+zz_utpc$zeros <- ifelse(dd_utpc$ta_utpc >= -2 & 
+                              dd_utpc$ta <= 0 & 
+                              dd_utpc$pf_utpc <= 0.01, 1, 0)
+
+zz_utpc <- zz_utpc %>% 
+  group_by(type) %>%
+  mutate(zero_test = zero_fun(zeros)) %>% 
+  ungroup()
+
+g_zeros_prbs <- ggplot(data = zz_utpc %>% 
+                         filter(zero_test == 0) %>% 
+                        mutate(type = factor(type)), 
+                  mapping = aes(x = ta_utpc, y = pf_utpc, color = type)) + 
+  geom_point() + 
+  # geom_line(data = utpc_prbs %>%
+  #             mutate(type = factor(type)), linetype = 2) +
+  # facet_wrap(vars(type), scales = "free") 
+  scale_color_viridis_d(guide="none") + 
+  # geom_line(data = tmp_utpc, color = "black") 
+  xlim(-6, 1.1)
+  
+
+print(g_zeros_prbs)
+
+```
+
