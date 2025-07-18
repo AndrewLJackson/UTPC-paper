@@ -204,7 +204,7 @@ print(gg1)
 ```
 
 
-## Find the problematic fits
+## Plot the UTPCs excluding data and models that do not fit well
 
 
 UTPC transformed data. 
@@ -216,14 +216,16 @@ g_focus_utpc <- ggplot(data = dd_utpc %>%
                          filter(u_yopt <= 2) %>%
                       mutate(type = factor(type)), 
                   mapping = aes(x = ta_utpc, y = pf_utpc)) + 
-  geom_point(size = 1, alpha = 0.1) + 
+  geom_point(size = 1, alpha = 0.2) + 
   scale_color_viridis_d(guide="none") +
   # scale_color_viridis_d() + 
   geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
-                col = "red") + 
-  ylim(-1, 5) +
+                col = "white", linewidth = 1, xlim = c(-6, 1)) + 
+  ylim(-0.5, 5) +
   xlim(-6, 1.1) + 
-  theme_classic()
+  theme_classic() + 
+  xlab(expression(italic("(T"["trial"]*" - T"["opt"]*") / (T"["c"]*" - T"["opt"]*")"))) +
+  ylab( expression("Pf / Pf"["max"]*"") )
   
 
 print(g_focus_utpc)
