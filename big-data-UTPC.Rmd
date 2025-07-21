@@ -9,8 +9,8 @@ library(tidyverse)
 library(magrittr)
 library(readxl)
 library(patchwork)
-library(plotly)
-library(ggforce)
+library(plotly) # for interactive plots
+library(ggforce) # for multi page facet plots
 ```
 
 
@@ -171,26 +171,30 @@ save(big_dd,
 
 ## Visualise the UTPC on all data
 
+Before visualisng the data, we need to recognise and identify that a relatively small proportion of the datasets do not fit well. This is on account of some of them having a small temperature range that does not approach the optimum even close, and others have zero performance values interspersed along the temperature range. Some of them also fit with very high pf_max values which on the UTPC scale should be very close to 1: we exclude fits that are more than 2.
+
+Some of the model fits end up close to boundaries of our set limits on Topt, and we can start by excluding those. In the full dataset there are `r length(unique(type))` experiments reported. We create a new column that flags the dataset as "problematic" if it satifies our criteria. 
+
 ```{r}
-
-dd_utpc <- data2utpc(big_dd)
-
-aj <- big_dd %>% split(.$type) %>% map(utpc2data) %>% bind_rows()
+dd_utpc %<>% mutate(problematic = case_when(
+  u_Topt <= 0.1 | u_Topt >99 ~ TRUE, 
+  u_yopt >= 5 ~ TRUE,
+  .default = FALSE
+))
 
 ```
+
+This flags `r nrow(unique(dd_utpc[dd_utpc$problematic, "type"]))` experiments as potential problem fits, and we exclude these going forward.
+
 
 separate panels by phylum
 
-```{r}
-
-# dd_utpc %>% split(.$phylum) %>% map()
-
-```
 
 
 ```{r}
 
-gg1 <- ggplot(data = dd_utpc, mapping = aes(x = ta_utpc, 
+gg1 <- ggplot(data = dd_utpc %>% filter(!problematic), 
+              mapping = aes(x = ta_utpc, 
                                        y = pf_utpc)) + 
   geom_point() + 
   facet_wrap(vars(phylum), 
@@ -206,14 +210,11 @@ print(gg1)
 
 ## Plot the UTPCs excluding data and models that do not fit well
 
-
-UTPC transformed data. 
-
-NB plot only curves which have 
+NB plot only curves which have esimtated $pf_{max}$ on the UTPC scale less than 2. We would expect them all to be very close to 1.
 
 ```{r}
 g_focus_utpc <- ggplot(data = dd_utpc %>% 
-                         filter(u_yopt <= 2) %>%
+                         filter(!problematic) %>%
                       mutate(type = factor(type)), 
                   mapping = aes(x = ta_utpc, y = pf_utpc)) + 
   geom_point(size = 1, alpha = 0.2) + 
@@ -230,6 +231,32 @@ g_focus_utpc <- ggplot(data = dd_utpc %>%
 
 print(g_focus_utpc)
 ```
+
+As an ancilliary figure, we can explore the relationship between the estimated Tc and T_opt.
+
+```{r}
+
+type_Tc_Topt <- dd_utpc %>% 
+                         filter(!problematic) %>%
+  group_by(type) %>% summarise(Topt = u_Topt[1], Tc = u_Tc[1]) %>%
+  ungroup()
+
+# there are small proportion of rows with Topt = the lower limit of 
+# our model fitting process, which we chose to exclude
+type_Tc_Topt %<>% filter(Topt >= 0.01)
+
+gg_Topt_Tc <- ggplot(data = type_Tc_Topt, 
+                     mapping = aes(x = Topt, y = Tc)) + 
+  geom_point(alpha = 0.5) + 
+  ylim(0, 100) + 
+  geom_smooth(method = "lm", color = "red") + 
+  geom_abline(slope = 1, intercept = 0, color = "blue")
+
+print(gg_Topt_Tc)
+
+```
+
+
 ## Find the problem fits
 
 ```{r}
@@ -247,14 +274,14 @@ utpc_prbs <- dd_prbs %>% split(.$type) %>% map(utpc2data) %>% bind_rows()
 
 ```
 
-plot them
+We could plot them but there are `r length(unique(dd_prbs$type))` and thats too many even for a series of multipanel plots. Here we just plot the first page of them.
 
-```{r}
+```{r, fig.height=12}
 
-tmp <- data.frame(u_Delta = 7, u_Topt = 42, u_yopt = 0.00073, 
-                  type = -999)
-
-tmp_utpc = utpc2data(tmp)
+# tmp <- data.frame(u_Delta = 7, u_Topt = 42, u_yopt = 0.00073, 
+#                   type = -999)
+# 
+# tmp_utpc = utpc2data(tmp)
 
 
 g_raw_prbs <- ggplot(data = dd_prbs %>% 
@@ -264,18 +291,21 @@ g_raw_prbs <- ggplot(data = dd_prbs %>%
   geom_line() + 
   geom_line(data = utpc_prbs %>%
               mutate(type = factor(type)), linetype = 2) +
-  facet_wrap_paginate(vars(type), scales = "free", ncol = 5, nrow = 4, 
+  # facet_wrap(vars(type), scales = "free")
+  facet_wrap_paginate(vars(type), scales = "free", ncol = 7, nrow = 6,
                       page = 1)
   # scale_color_viridis_d(guide="none")
   # geom_line(data = tmp_utpc, color = "black")
   
-  
+
 
 print(g_raw_prbs)
 
 ```
 
-```{r}
+We can also print a table summarising these problematic datasets along with some of the fitted parameters, but again there are too many in this instance. For many of them, the $pf_{max}$ fitted parameter is maxed out at the upper limit of the model fit (10).
+
+```{r, eval = FALSE}
 
 dd_prbs %>% group_by(type) %>%
   summarise(u_Topt = u_Topt[1], u_yopt = u_yopt[1], pf_max = pf_max[1])
@@ -284,29 +314,43 @@ dd_prbs %>% group_by(type) %>%
 
 ### Filter for the zeroes
 
+Some of the datasets appear to hit the floor at zero on the UTPC scaled performance axis. Here we apply a crude filter to identify these.
+
 ```{r}
-zero_fun <- function(x){ifelse(any(x == 0), 0, 1)}
+# a helper function to find the experiments (column "types") that 
+# contain very low performance values
+zero_fun <- function(x){ifelse(any(x), 1, 0)}
 
-zz_utpc$zeros <- ifelse(dd_utpc$ta_utpc >= -2 & 
-                              dd_utpc$ta <= 0 & 
-                              dd_utpc$pf_utpc <= 0.01, 1, 0)
+# make a copy of the main data.frame object
+zz_utpc <- dd_utpc
 
+# find which rows have very low performance values for rescaled 
+# temperatures larger than -1, which according to UTPC should be 
+# close to pf = 1 around the optimum.
+zz_utpc$zeros <- ifelse(dd_utpc$ta_utpc >= -1 & 
+                              dd_utpc$ta_utpc <= 0 & 
+                              dd_utpc$pf_utpc <= 0.001, 1, 0)
+
+# apply a filter code to each experiment (type) that 
+# satisfies our criterion.
 zz_utpc <- zz_utpc %>% 
   group_by(type) %>%
   mutate(zero_test = zero_fun(zeros)) %>% 
   ungroup()
 
+# plot only these zero-filtered experiments.
 g_zeros_prbs <- ggplot(data = zz_utpc %>% 
-                         filter(zero_test == 0) %>% 
+                         filter(zero_test == 1) %>% 
                         mutate(type = factor(type)), 
-                  mapping = aes(x = ta_utpc, y = pf_utpc, color = type)) + 
+                  mapping = aes(x = ta, y = pf)) + 
   geom_point() + 
+  geom_line() + 
   # geom_line(data = utpc_prbs %>%
   #             mutate(type = factor(type)), linetype = 2) +
-  # facet_wrap(vars(type), scales = "free") 
-  scale_color_viridis_d(guide="none") + 
+  facet_wrap(vars(type), scales = "free")
+  # scale_color_viridis_d(guide="none") + 
   # geom_line(data = tmp_utpc, color = "black") 
-  xlim(-6, 1.1)
+  # xlim(-6, 1.1)
   
 
 print(g_zeros_prbs)
