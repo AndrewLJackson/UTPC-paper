@@ -280,14 +280,23 @@ As an ancilliary figure, we can explore the relationship between the estimated T
 ```{r}
 
 gg_Topt_Tc <- ggplot(data = dd_utpc %>% filter(!problematic), 
-                     mapping = aes(x = u_Topt, y = u_Tc, 
-                                   color = problematic)) + 
+                     mapping = aes(x = u_Topt, y = u_Tc)) + 
   geom_point(alpha = 0.5) + 
   # ylim(0, 100) +
   geom_smooth(method = "lm", color = "red") + 
   geom_abline(slope = 1, intercept = 0, color = "blue")
 
 print(gg_Topt_Tc)
+
+```
+
+Find and plot the dataset that generates the Tc estimate > 200.
+
+```{r}
+
+ggplot(data = dd_utpc %>% filter(u_Tc >200), 
+       mapping = aes(x = ta, y = pf, color = factor(type))) + 
+  geom_point()
 
 ```
 
@@ -328,10 +337,17 @@ print(g_raw_prbs)
 
 We can also print a table summarising these problematic datasets along with some of the fitted parameters, but again there are too many in this instance. For many of them, the $pf_{max}$ fitted parameter is maxed out at the upper limit of the model fit (10).
 
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 
-dd_prbs %>% group_by(type) %>%
-  summarise(u_Topt = u_Topt[1], u_yopt = u_yopt[1], pf_max = pf_max[1])
+dd_utpc %>% 
+  filter(problematic) %>% 
+  group_by(type) %>%
+  summarise(u_Topt = u_Topt[1], 
+            u_yopt = u_yopt[1],
+            u_Tc = u_Tc[1],
+            pf_max = pf_max[1], 
+            ) %>%
+  kable(digits = 2)
 
 ```
 
