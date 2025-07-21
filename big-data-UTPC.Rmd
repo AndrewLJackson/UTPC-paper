@@ -136,10 +136,7 @@ utpc2data <- function(dd, y_adj = 0, n = 100){
 ### Map over all the data
 
 ```{r}
-# ph <- "Proteobacteria"
 
-# big_dd <- big_dd %>%
-#   filter(specific_trait_group == "population_growth_rate")
 
 # rescale performance data to be numbers closer to 1
 big_dd <- big_dd %>% group_by(type) %>% 
@@ -186,6 +183,8 @@ dd_utpc %<>% mutate(problematic = case_when(
 
 This flags `r nrow(unique(dd_utpc[dd_utpc$problematic, "type"]))` experiments as potential problem fits, and we exclude these going forward.
 
+
+Summarise the data for the non-problematic fits. 
 
 separate panels by phylum
 
