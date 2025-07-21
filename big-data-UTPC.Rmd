@@ -116,7 +116,7 @@ do_tpc_fit <- function(x){
                ta = x$ta,
                method = "L-BFGS-B",
                lower = c(0.2, 10^-3, 1), 
-               upper = c(10, 100, Inf))
+               upper = c(10, 150, Inf))
   
   # return a tibble (data.frame)
   return(x %<>% mutate(u_yopt  = fit$par[1],
@@ -202,11 +202,12 @@ dd_utpc <- data2utpc(big_dd)
 
 Before visualisng the data, we need to recognise and identify that a relatively small proportion of the datasets do not fit well. This is on account of some of them having a small temperature range that does not approach the optimum even close, and others have zero performance values interspersed along the temperature range. Some of them also fit with very high pf_max values which on the UTPC scale should be very close to 1: we exclude fits that are more than 2.
 
-Some of the model fits end up close to boundaries of our set limits on Topt, and we can start by excluding those. In the full dataset there are `r length(unique(big_dd$type))` experiments reported. We create a new column that flags the dataset as "problematic" if it satifies our criteria. 
+Some of the model fits end up close to boundaries of our set limits on Topt, and we can start by excluding those. In the full dataset there are `r length(unique(big_dd$type))` experiments reported. We create a new column that flags the dataset as "problematic" if it satifies our criteria. There is also one dataset `40031` that produces an estimated $T_c > 200$ which is clearly inappropriate.  
 
 ```{r}
 dd_utpc %<>% mutate(problematic = case_when(
   u_Topt <= 0.1 | u_Topt >99 | u_yopt >= 2 ~ TRUE,
+  type == 40031 ~ TRUE, 
   .default = FALSE
 ))
 
@@ -223,7 +224,8 @@ Summarise the data for the non-problematic fits.
 ```{r}
 
 dd_utpc %>% group_by(phylum, problematic) %>% summarise(n_type = length(unique(type))) %>%
-  pivot_wider(names_from = problematic, values_from = n_type) %>%
+  pivot_wider(names_from = problematic, values_from = n_type) %>% 
+  ungroup() %>% 
   kableExtra::kable()
 
 ```
@@ -279,7 +281,14 @@ As an ancilliary figure, we can explore the relationship between the estimated T
 
 ```{r}
 
-gg_Topt_Tc <- ggplot(data = dd_utpc %>% filter(!problematic), 
+# group by type and summarise to extract only one value per fitted
+# dataset. 
+
+gg_Topt_Tc <- ggplot(data = dd_utpc %>% filter(!problematic) %>%
+                       group_by(type) %>% 
+                       summarise(u_Topt = u_Topt[1], 
+                                 u_Tc = u_Tc[1]) %>% 
+                       ungroup(), 
                      mapping = aes(x = u_Topt, y = u_Tc)) + 
   geom_point(alpha = 0.5) + 
   # ylim(0, 100) +
@@ -313,6 +322,9 @@ We could plot them but there are too many even for a series of multipanel plots.
 # 
 # tmp_utpc = utpc2data(tmp)
 
+dd_prob_utpcs <- dd_utpc %>% filter(problematic) %>% split(.$type) %>% 
+  map(utpc2data) %>% bind_rows()
+
 
 g_raw_prbs <- ggplot(data = dd_utpc %>% 
                        filter(problematic) %>%
@@ -325,7 +337,10 @@ g_raw_prbs <- ggplot(data = dd_utpc %>%
               mutate(type = factor(type)), linetype = 2) +
   # facet_wrap(vars(type), scales = "free")
   facet_wrap_paginate(vars(type), scales = "free",
-                      page = 1)
+                      page = 1) + 
+  geom_line(data = dd_prob_utpcs %>% mutate(type = factor(type)),
+            mapping = aes(x = ta, y = pf / pf_max), 
+            color = "red")
   # scale_color_viridis_d(guide="none")
   # geom_line(data = tmp_utpc, color = "black")
   
@@ -342,7 +357,9 @@ We can also print a table summarising these problematic datasets along with some
 dd_utpc %>% 
   filter(problematic) %>% 
   group_by(type) %>%
-  summarise(u_Topt = u_Topt[1], 
+  summarise(phylum = phylum[1],
+            taxon = taxon[1],
+            u_Topt = u_Topt[1], 
             u_yopt = u_yopt[1],
             u_Tc = u_Tc[1],
             pf_max = pf_max[1], 
