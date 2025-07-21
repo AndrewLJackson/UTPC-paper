@@ -202,7 +202,7 @@ dd_utpc <- data2utpc(big_dd)
 
 Before visualisng the data, we need to recognise and identify that a relatively small proportion of the datasets do not fit well. This is on account of some of them having a small temperature range that does not approach the optimum even close, and others have zero performance values interspersed along the temperature range. Some of them also fit with very high pf_max values which on the UTPC scale should be very close to 1: we exclude fits that are more than 2.
 
-Some of the model fits end up close to boundaries of our set limits on Topt, and we can start by excluding those. In the full dataset there are `r length(unique(type))` experiments reported. We create a new column that flags the dataset as "problematic" if it satifies our criteria. 
+Some of the model fits end up close to boundaries of our set limits on Topt, and we can start by excluding those. In the full dataset there are `r length(unique(big_dd$type))` experiments reported. We create a new column that flags the dataset as "problematic" if it satifies our criteria. 
 
 ```{r}
 dd_utpc %<>% mutate(problematic = case_when(
