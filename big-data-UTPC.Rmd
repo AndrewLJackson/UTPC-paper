@@ -21,8 +21,11 @@ library(kableExtra)
 
 
 ```{r}
-
-big_dd <- read.csv("data/thermal_performance_datasets.csv") %>%
+# import the full dataset and rename the column "id" to "type" to match our 
+# original analysis of the Rezende dataset, and also to avoid using an object
+# named "id" which is used in a lot of tidyverse functions. Drop the 
+# "citation" column as it is confusing on printout to screen.
+dd_full <- read.csv("data/thermal_performance_datasets.csv") %>%
   rename(type = `id`) %>%
   select(-citation)
 
@@ -32,38 +35,59 @@ Loop over the datasets and fit a quadratic as a test for concave downwards crite
 
 ```{r}
 
-# a function to fit a quadratic and test for concave down. 
-concaveDown <- function(x){
+# Define a function to fit a quadratic and test for concave down. 
+# The paper states they only used data with a "rise and fall" pattern but 
+# did not provide a selection criterion for this. This is our version of a 
+# test for concave down patter in the data. Our criterion is that the 
+# coefficient of the quadratic term must be negative and the associated 
+# p-value less than 0.5.
+concaveDown <- function(x, p_crit = 0.5){
   
+  # fit a quadratic linear model of performance against temperature
+  # using the raw unscaled or transformed data.
   m1 <- lm(trait_value ~ temperature + I(temperature^2), data = x)
   
-  out <- ifelse(summary(m1)$coefficients[3,4] <= 0.2 & 
+  # if concave down criteria met return T else F
+  out <- ifelse(summary(m1)$coefficients[3,4] <= p_crit & 
            summary(m1)$coefficients[3,1] < 0, 
          TRUE, FALSE)
   
+  # return the input data.frame with a new column identifying the rows 
+  # as coming from an experiment that had concave down (T) or not (F)
   return(x %>% mutate(concaveDown = out))
   
 }
 
-big_dd %<>% 
+
+
+# Map this function over all the experiments, i.e. by column "type" and filter
+# to keep only datasets that satisfy the concave down criteria
+dd_full %<>% 
   split(.$type) %>% 
   map(~possibly(concaveDown, otherwise = 'error here')(.x)) %>%
-  bind_rows() %>% 
+  bind_rows()
+
+n_experiments  <- length(unique(dd_full$type))
+n_concave_down <- length(unique(dd_full$type[dd_full$concaveDown==T]))
+n_concave_down_fail <- length(unique(dd_full$type[dd_full$concaveDown==F]))
+
+# filter by concaveDown
+dd_full %<>% 
   filter(concaveDown)
 
 ```
 
-
-
-
+In the full dataset there are `r n_experiments` experiments. According to our criterion for satisfying "concave down", `r n_concave_down_fail` fail and are removed, leaving `r n_concave_down` experiments for analysis by UTPC. 
 
 ### Fit our own parameters using UTPC method
 
 We optimise on the least squares of the rescaled data to the universal thermal performance curve using the L-BFSG-U approach to bound the parameters. 
 
+In this chunk we define some functions which we will use later to fit the models and visualise the data. 
+
 ```{r}
 
-# define our fitness function which is the sum of squares of 
+# Define our fitness function which is the sum of squares of 
 # the predicted - observed
 tpc_fit <- function(x, pf, ta){
   
@@ -73,13 +97,13 @@ tpc_fit <- function(x, pf, ta){
   Delta <- x[3] # the difference between Tc-Topt
   Tc    <- Topt + Delta # calculate Tc
   
-  # sum of squares
+  # sum of squares which is to be minimised
   sum(((yopt * exp( (ta - Topt) / Delta) * (1 - (ta - Topt)/Delta)) - pf) ^ 2)
   
   
 }
 
-# a function to find sensible initial values for the optimiser
+# Define a function to find sensible initial values for the optimiser
 get_inits <- function(x){
   
   # initialise the initial parameter value vector
@@ -118,7 +142,8 @@ do_tpc_fit <- function(x){
                lower = c(0.2, 10^-3, 1), 
                upper = c(10, 150, Inf))
   
-  # return a tibble (data.frame)
+  # return a tibble (data.frame) of fitted parameters copied over all the 
+  # rows for each experiment.
   return(x %<>% mutate(u_yopt  = fit$par[1],
                        u_Topt  = fit$par[2],
                        u_Delta = fit$par[3],
@@ -148,8 +173,8 @@ data2utpc <- function(dd){
 # Performance can be adjusted according by subtracting the value given in 
 # p_adj, and would typically be used to allow for negative performance values
 # in the data. 
-utpc2data <- function(dd, y_adj = 0, n = 100){
-  UTPC <- data.frame(x = seq(-4, 1, length.out = n)) %>%
+utpc2data <- function(dd, y_adj = 0, n = 100, x_min = -4, x_max = 1){
+  UTPC <- data.frame(x = seq(x_min, x_max, length.out = n)) %>%
   mutate(y = (1-x)*exp(x)) %>%
   mutate(ta = (x * dd$u_Delta[1]) + dd$u_Topt[1],
          pf = (y * dd$u_yopt[1] - y_adj),
@@ -162,38 +187,42 @@ utpc2data <- function(dd, y_adj = 0, n = 100){
 
 ### Map over all the data
 
+We loop over all the experiments in the data and fit our UTPC model. Before fitting, the performance variable (`trait_value` in this dataset) are transformed by dividing by the max value within an experiment. This is done to ensure that the performance (y-axis) data are on a similar scale to the temperature data (x-axis). If this is not done, the optimiser can run into difficulty with the gradient: this process is similar to z-scoring data for linear regression for the same reasons. We retain the max performance value ($pf_{max}$) for each experiment in order to reverse this scaling when plotting or interpreting the fitted UTPC later on. 
+
 ```{r}
 
 
-# rescale performance data to be numbers closer to 1
-big_dd <- big_dd %>% group_by(type) %>% 
+# rescale performance data to be numbers closer to 1 and store pf_max
+dd_full <- dd_full %>% group_by(type) %>% 
   mutate(ta = temperature,
          pf_max = max(trait_value),
          pf = trait_value / pf_max) %>%
   ungroup()
 
 
-# split the data on "code" variable and map our optimiser over all
+# split the data on "type" variable and map our optimiser over all
 # the possibly() function acts as an error catcher, and then rebind it 
 # into a single tibble again on completion.
-big_dd %<>% 
+dd_full %<>% 
   split(.$type) %>% 
   map(~possibly(do_tpc_fit, otherwise = 'error here')(.x)) %>%
   bind_rows()
 
+
+
+# rescale the data onto the UTPC scale
+dd_utpc <- data2utpc(dd_full)
+
+
 ## save this object to file
-save(big_dd, 
-     file = "data/combined_dat_params.rda", 
+save(dd_utpc, 
+     file = "data/full_dataset_UTPC.rda", 
      compress = "xz")
 
 ## write to file
-# write.csv(combined_dat_params, 
-#           file = "data_for_JF.csv", 
+# write.csv(dd_utpc, 
+#           file = "full_dataset_UTPC.csv", 
 #           row.names = FALSE)
-
-# rescale the data onto the UTPC scale
-dd_utpc <- data2utpc(big_dd)
-
 
 ```
 
@@ -202,7 +231,7 @@ dd_utpc <- data2utpc(big_dd)
 
 Before visualisng the data, we need to recognise and identify that a relatively small proportion of the datasets do not fit well. This is on account of some of them having a small temperature range that does not approach the optimum even close, and others have zero performance values interspersed along the temperature range. Some of them also fit with very high pf_max values which on the UTPC scale should be very close to 1: we exclude fits that are more than 2.
 
-Some of the model fits end up close to boundaries of our set limits on Topt, and we can start by excluding those. In the full dataset there are `r length(unique(big_dd$type))` experiments reported. We create a new column that flags the dataset as "problematic" if it satifies our criteria. There is also one dataset `40031` that produces an estimated $T_c > 200$ which is clearly inappropriate.  
+Some of the model fits end up close to boundaries of our set limits on Topt, and we can start by excluding those. In the concave down dataset there are `r length(unique(dd_utpc$type))` experiments reported. We create a new column that flags the dataset as "problematic" if it satifies our criteria. There is also one dataset `40031` that produces an estimated $T_c > 200$ which is clearly inappropriate.  
 
 ```{r}
 dd_utpc %<>% mutate(problematic = case_when(
@@ -219,7 +248,7 @@ dd_utpc %<>% mutate(problematic = case_when(
 This flags `r nrow(unique(dd_utpc[dd_utpc$problematic, "type"]))` experiments as potential problem fits, and we exclude these going forward.
 
 
-Summarise the data for the non-problematic fits. 
+Summarise the data for the non-problematic fits. This table counts the number of experiments within each Phylum that are either flagged as "problematic" (TRUE) or else are retained for analysis (FALSE).
 
 ```{r}
 
@@ -267,7 +296,7 @@ g_focus_utpc <- ggplot(data = dd_utpc %>%
   # scale_color_viridis_d() + 
   geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
                 col = "white", linewidth = 1, xlim = c(-6, 1)) + 
-  ylim(-0.5, 5) +
+  ylim(-0.5, 3.5) +
   xlim(-6, 1.1) + 
   theme_classic() + 
   xlab(expression(italic("(T"["trial"]*" - T"["opt"]*") / (T"["c"]*" - T"["opt"]*")"))) +
@@ -277,7 +306,7 @@ g_focus_utpc <- ggplot(data = dd_utpc %>%
 print(g_focus_utpc)
 ```
 
-As an ancilliary figure, we can explore the relationship between the estimated Tc and T_opt.
+As an ancilliary figure, we can explore the relationship between the estimated Tc and T_opt. Red line is a linear regression and blue is the 1:1 line for reference.
 
 ```{r}
 
@@ -299,21 +328,22 @@ print(gg_Topt_Tc)
 
 ```
 
-Find and plot the dataset that generates the Tc estimate > 200.
+Find and plot the dataset that generates the Tc estimate > 200 along with the fitted UTPC which is clearly a mismatch.
 
 ```{r}
 
 ggplot(data = dd_utpc %>% filter(u_Tc >200), 
-       mapping = aes(x = ta, y = pf, color = factor(type))) + 
-  geom_point()
+       mapping = aes(x = ta, y = pf * pf_max, color = factor(type))) + 
+  geom_point() + 
+  geom_line(data = utpc2data(dd_utpc %>% filter(u_Tc >200), x_min = -2)) + 
+  xlim(c(0, 50))
 
 ```
 
 
 ## Focus on the problematic fits
 
-
-We could plot them but there are too many even for a series of multipanel plots. Here we just plot the first page of them.
+Data are plotted on the original performance scale given by $y = pf \times pf_{max}$ and similarly the utpc has to be rescaled to match.
 
 ```{r, fig.height=12}
 
@@ -322,14 +352,19 @@ We could plot them but there are too many even for a series of multipanel plots.
 # 
 # tmp_utpc = utpc2data(tmp)
 
+# map over the problematic experiments and fit a UTPC to the scale of the raw
+# data using our function utpc2data()
 dd_prob_utpcs <- dd_utpc %>% filter(problematic) %>% split(.$type) %>% 
   map(utpc2data) %>% bind_rows()
 
-
+# A multi-panel plot of the problematic datasets on the scale of the raw
+# data along with the corresponding UTPC.
+# The function facet_wrap_paginate() is used in place of face_wrap() for the 
+# more general case should there be a lot of panels in the problematic set.
 g_raw_prbs <- ggplot(data = dd_utpc %>% 
                        filter(problematic) %>%
                         mutate(type = factor(type)), 
-                  mapping = aes(x = ta, y = pf / pf_max)) + 
+                  mapping = aes(x = ta, y = pf * pf_max)) + 
   geom_point() + 
   geom_line() + 
   geom_line(data = dd_utpc %>% 
@@ -339,7 +374,7 @@ g_raw_prbs <- ggplot(data = dd_utpc %>%
   facet_wrap_paginate(vars(type), scales = "free",
                       page = 1) + 
   geom_line(data = dd_prob_utpcs %>% mutate(type = factor(type)),
-            mapping = aes(x = ta, y = pf / pf_max), 
+            mapping = aes(x = ta, y = pf * pf_max), 
             color = "red")
   # scale_color_viridis_d(guide="none")
   # geom_line(data = tmp_utpc, color = "black")
@@ -365,6 +400,42 @@ dd_utpc %>%
             pf_max = pf_max[1], 
             ) %>%
   kable(digits = 2)
+
+```
+
+## Focus on a single Phylum for our multipanel plot
+
+Here we chose a single Phylum.
+
+The challenge is that the performance scales vary a lot in many cases by experiment, even within a Phylum. this renders plotting them on a single figure difficult.
+
+```{r}
+
+# pick your phylum
+ph <- "Firmicutes"
+
+# filter only the proteobacteria that are not flagged problematic
+dd_phylum <- dd_utpc %>% 
+  filter(phylum == ph  & !problematic) 
+
+# rescale the UTPCs back to the raw data scale by experiment
+dd_phylum_utpcs <- dd_phylum %>% split(.$type) %>% 
+  map(utpc2data) %>% bind_rows()
+
+# plot the raw data with the curves on the raw data
+gg_phylum <- ggplot(data = dd_phylum, 
+                     mapping = aes(x = ta, 
+                                   y = trait_value, 
+                                   color = factor(type))) + 
+  geom_point() + 
+  scale_color_viridis_d(guide = "none") + 
+  geom_line(data = dd_phylum_utpcs %>% mutate(type = factor(type)),
+            mapping = aes(x = ta, 
+                          y = pf * pf_max, 
+                          color = factor(type)))
+  
+
+print(gg_phylum)
 
 ```
 
