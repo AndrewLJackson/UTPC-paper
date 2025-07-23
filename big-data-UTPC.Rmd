@@ -412,7 +412,7 @@ The challenge is that the performance scales vary a lot in many cases by experim
 ```{r}
 
 # pick your phylum
-ph <- "Firmicutes"
+ph <- "Cyanobacteria"
 
 # filter only the proteobacteria that are not flagged problematic
 dd_phylum <- dd_utpc %>% 
