@@ -1,0 +1,339 @@
+---
+title: "Run UTPC on the big datasets"
+output: html_notebook
+---
+
+
+```{r setup}
+library(tidyverse)
+library(magrittr)
+library(readxl)
+library(patchwork)
+library(plotly) # for interactive plots
+library(ggforce) # for multi page facet plots
+library(kableExtra)
+```
+
+
+
+
+## Import the data
+
+
+```{r}
+# import the full dataset and rename the column "id" to "type" to match our 
+# original analysis of the Rezende dataset, and also to avoid using an object
+# named "id" which is used in a lot of tidyverse functions. Drop the 
+# "citation" column as it is confusing on printout to screen.
+dd_full <- read.csv("data/thermal_performance_datasets.csv") %>%
+  rename(type = `id`) %>%
+  select(-citation)
+
+```
+
+Loop over the datasets and fit a quadratic as a test for concave downwards criterion.
+
+```{r}
+
+# Define a function to fit a quadratic and test for concave down. 
+# The paper states they only used data with a "rise and fall" pattern but 
+# did not provide a selection criterion for this. This is our version of a 
+# test for concave down patter in the data. Our criterion is that the 
+# coefficient of the quadratic term must be negative and the associated 
+# p-value less than 0.5.
+concaveDown <- function(x, p_crit = 0.5){
+  
+  # fit a quadratic linear model of performance against temperature
+  # using the raw unscaled or transformed data.
+  m1 <- lm(trait_value ~ temperature + I(temperature^2), data = x)
+  
+  # if concave down criteria met return T else F
+  out <- ifelse(summary(m1)$coefficients[3,4] <= p_crit & 
+           summary(m1)$coefficients[3,1] < 0, 
+         TRUE, FALSE)
+  
+  # return the input data.frame with a new column identifying the rows 
+  # as coming from an experiment that had concave down (T) or not (F)
+  return(x %>% mutate(concaveDown = out))
+  
+}
+
+
+
+# Map this function over all the experiments, i.e. by column "type" and filter
+# to keep only datasets that satisfy the concave down criteria
+dd_full %<>% 
+  split(.$type) %>% 
+  map(~possibly(concaveDown, otherwise = 'error here')(.x)) %>%
+  bind_rows()
+
+n_experiments  <- length(unique(dd_full$type))
+n_concave_down <- length(unique(dd_full$type[dd_full$concaveDown==T]))
+n_concave_down_fail <- length(unique(dd_full$type[dd_full$concaveDown==F]))
+
+# filter by concaveDown
+dd_full %<>% 
+  filter(concaveDown)
+
+```
+
+In the full dataset there are `r n_experiments` experiments. According to our criterion for satisfying "concave down", `r n_concave_down_fail` fail and are removed, leaving `r n_concave_down` experiments for analysis by UTPC. 
+
+### Fit our own parameters using UTPC method
+
+We optimise on the least squares of the rescaled data to the universal thermal performance curve using the L-BFSG-U approach to bound the parameters. 
+
+In this chunk we define some functions which we will use later to fit the models and visualise the data. 
+
+```{r}
+
+# Define our fitness function which is the sum of squares of 
+# the predicted - observed
+tpc_fit <- function(x, pf, ta){
+  
+  # extract the parameters
+  yopt  <- x[1] # the value of y at the optimum
+  Topt  <- x[2] # the optimal temperature
+  Delta <- x[3] # the difference between Tc-Topt
+  Tc    <- Topt + Delta # calculate Tc
+  
+  # sum of squares which is to be minimised
+  sum(((yopt * exp( (ta - Topt) / Delta) * (1 - (ta - Topt)/Delta)) - pf) ^ 2)
+  
+  
+}
+
+# Define a function to find sensible initial values for the optimiser
+get_inits <- function(x){
+  
+  # initialise the initial parameter value vector
+  inits <- c(NA, NA, NA)
+  
+  # find the largest performance
+  idx_max_y <- which.max(x$pf)
+  
+  # the largest y value is a good guess for yopt
+  inits[1] <- x$pf[idx_max_y]
+  
+  # the corresponding temperature is a good guess for Topt
+  inits[2] <- x$ta[idx_max_y]
+  
+  # use the largest T value as a simple guess for Delta
+  inits[3] <-tail(x$ta[is.finite(x$ta)],1) - inits[2]
+  
+  # return the initial values
+  return(inits)
+}
+
+
+# a wrapper function to do the fit and return a data.frame
+# The object x coming in is a data.frame of the same structure
+# as the full dataset. The output is a tibble of the same structure
+# with columns appended for estimates of the universal TPC with 
+# prefix "u_"
+do_tpc_fit <- function(x){
+  
+  # call the optimiser
+  fit <- optim(get_inits(x), 
+               tpc_fit,
+               pf = x$pf, 
+               ta = x$ta,
+               method = "L-BFGS-B",
+               lower = c(0.2, 10^-3, 1), 
+               upper = c(10, 150, Inf))
+  
+  # return a tibble (data.frame) of fitted parameters copied over all the 
+  # rows for each experiment.
+  return(x %<>% mutate(u_yopt  = fit$par[1],
+                       u_Topt  = fit$par[2],
+                       u_Delta = fit$par[3],
+                       u_Tc    = fit$par[2] + fit$par[3], 
+                       SS = fit$value)
+         )
+
+  
+}
+
+
+# this function takes a fitted UTPC model and scales the data to the 
+# UTPC. Returns a data.frame the same as the original data.frame
+# with new columns for 
+# scaled performance pf_utpc 
+# and scaled temperature ta_utpc
+data2utpc <- function(dd){
+  dd %<>% mutate(pf_utpc = pf / u_yopt,
+                ta_utpc = (ta - u_Topt) / u_Delta
+                )
+  return(dd)
+}
+
+# This function scales the UTPC curve to the original data based on 
+# the fitted UTPC model. Returns a new data.frame with n values of 
+# the UTPC function evaluated and rescaled to the data provied in dd.
+# Performance can be adjusted according by subtracting the value given in 
+# p_adj, and would typically be used to allow for negative performance values
+# in the data. 
+utpc2data <- function(dd, y_adj = 0, n = 100, x_min = -4, x_max = 1){
+  UTPC <- data.frame(x = seq(x_min, x_max, length.out = n)) %>%
+  mutate(y = (1-x)*exp(x)) %>%
+  mutate(ta = (x * dd$u_Delta[1]) + dd$u_Topt[1],
+         pf = (y * dd$u_yopt[1] - y_adj),
+         type = dd$type[1],
+         pf_max = dd$pf_max[1]
+)
+  return(UTPC)
+}
+```
+
+### Map over all the data
+
+We loop over all the experiments in the data and fit our UTPC model. Before fitting, the performance variable (`trait_value` in this dataset) are transformed by dividing by the max value within an experiment. This is done to ensure that the performance (y-axis) data are on a similar scale to the temperature data (x-axis). If this is not done, the optimiser can run into difficulty with the gradient: this process is similar to z-scoring data for linear regression for the same reasons. We retain the max performance value ($pf_{max}$) for each experiment in order to reverse this scaling when plotting or interpreting the fitted UTPC later on. 
+
+```{r}
+
+
+# rescale performance data to be numbers closer to 1 and store pf_max
+dd_full <- dd_full %>% group_by(type) %>% 
+  mutate(ta = temperature,
+         pf_max = max(trait_value),
+         pf = trait_value / pf_max) %>%
+  ungroup()
+
+
+# split the data on "type" variable and map our optimiser over all
+# the possibly() function acts as an error catcher, and then rebind it 
+# into a single tibble again on completion.
+dd_full %<>% 
+  split(.$type) %>% 
+  map(~possibly(do_tpc_fit, otherwise = 'error here')(.x)) %>%
+  bind_rows()
+
+
+
+# rescale the data onto the UTPC scale
+dd_utpc <- data2utpc(dd_full)
+
+
+## save this object to file
+save(dd_utpc, 
+     file = "data/full_dataset_UTPC.rda", 
+     compress = "xz")
+
+## write to file
+# write.csv(dd_utpc, 
+#           file = "full_dataset_UTPC.csv", 
+#           row.names = FALSE)
+
+```
+
+
+## Visualise the UTPC on all data
+
+Before visualisng the data, we need to recognise and identify that a relatively small proportion of the datasets do not fit well. This is on account of some of them having a small temperature range that does not approach the optimum even close, and others have zero performance values interspersed along the temperature range. Some of them also fit with very high pf_max values which on the UTPC scale should be very close to 1: we exclude fits that are more than 2.
+
+Some of the model fits end up close to boundaries of our set limits on Topt, and we can start by excluding those. In the concave down dataset there are `r length(unique(dd_utpc$type))` experiments reported. We create a new column that flags the dataset as "problematic" if it satifies our criteria. There is also one dataset `40031` that produces an estimated $T_c > 200$ which is clearly inappropriate.  
+
+```{r}
+dd_utpc %<>% mutate(problematic = case_when(
+  u_Topt <= 0.1 | u_Topt >99 | u_yopt >= 2 ~ TRUE,
+  type == 40031 ~ TRUE, 
+  .default = FALSE
+))
+
+# set all to false to ignore this filter
+# dd_utpc %<>% mutate(problematic = FALSE)
+
+```
+
+This flags `r nrow(unique(dd_utpc[dd_utpc$problematic, "type"]))` experiments as potential problem fits, and we exclude these going forward.
+
+
+Summarise the data for the non-problematic fits. This table counts the number of experiments within each Phylum that are either flagged as "problematic" (TRUE) or else are retained for analysis (FALSE).
+
+```{r}
+
+dd_utpc %>% group_by(phylum, problematic) %>% summarise(n_type = length(unique(type))) %>%
+  pivot_wider(names_from = problematic, values_from = n_type) %>% 
+  ungroup() %>% 
+  kableExtra::kable()
+
+```
+
+
+separate panels by phylum
+
+
+
+```{r, fig.height=12}
+
+gg1 <- ggplot(data = dd_utpc %>% filter(!problematic), 
+              mapping = aes(x = ta_utpc, 
+                                       y = pf_utpc)) + 
+  geom_point() + 
+  facet_wrap(vars(phylum), 
+             scales = "free_x") +
+  ylim(-0.1,5) +
+  xlim(-6,1.1) + 
+  geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
+                col = "red", xlim = c(-6, 1))
+  # ylim(0, 10)
+
+print(gg1)
+```
+
+
+## Plot the UTPCs excluding data and models that do not fit well
+
+NB plot only curves which have esimtated $pf_{max}$ on the UTPC scale less than 2. We would expect them all to be very close to 1.
+
+```{r}
+g_focus_utpc <- ggplot(data = dd_utpc %>% 
+                         filter(!problematic) %>%
+                      mutate(type = factor(type)), 
+                  mapping = aes(x = ta_utpc, y = pf_utpc)) + 
+  geom_point(size = 1, alpha = 0.2) + 
+  scale_color_viridis_d(guide="none") +
+  # scale_color_viridis_d() + 
+  geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
+                col = "white", linewidth = 1, xlim = c(-6, 1)) + 
+  ylim(-0.5, 3.5) +
+  xlim(-6, 1.1) + 
+  theme_classic() + 
+  xlab(expression(italic("(T"["trial"]*" - T"["opt"]*") / (T"["c"]*" - T"["opt"]*")"))) +
+  ylab( expression("Pf / Pf"["max"]*"") )
+  
+
+print(g_focus_utpc)
+```
+
+## Extract and plot the residuals
+
+```{r}
+
+dd_utpc %<>% mutate(u_resid = pf_utpc - (1-ta_utpc)*exp(ta_utpc))
+
+```
+
+```{r}
+gg_resid <- ggplot(data = dd_utpc, mapping = aes(x = ta, y = u_resid)) + 
+  geom_point(alpha = 0.1) + 
+  geom_abline(slope = 0, intercept = 0, color = "red") + 
+  theme_classic() + 
+  geom_smooth()
+
+print(gg_resid)
+```
+
+QQ normal plots 
+
+```{r}
+qqnorm(dd_utpc$u_resid)
+qqline(dd_utpc$u_resid, col = "red")
+```
+
+
+
+
+
+
+
