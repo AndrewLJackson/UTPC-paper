@@ -139,7 +139,7 @@ g_2 <- ggplot(data = aj,
 
 
 # print to screen
-anim_save(file = "output/animate_uTPC.gif", animation = g_2)
+# anim_save(file = "output/animate_uTPC.gif", animation = g_2)
 
 
 
