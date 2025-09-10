@@ -1,4 +1,6 @@
-# UTPC-paper
+# UTPC-paper PNAS resubmission
+
+This branch is intended as a static branch to record the state of the repository before the large amount of editing at the point of resubmission of the associated paper to PNAS. This branch was created 10 Sept 2025.
 
 This repository contains files to reproduce the figures and analyses described within the associated paper _A universal thermal performance curve arises in biology and ecology_ by Jean-Fran&ccedil;ois Arnoldi, Andrew L Jackson, Ignacio Peralta-Maraver & Nicholas Payne.
 
