@@ -1,0 +1,225 @@
+---
+title: "Fit UTPC to Whole Ecosystem Metabolism"
+output: html_notebook
+---
+
+
+```{r setup}
+library(tidyverse)
+library(magrittr)
+library(readxl)
+```
+
+## Import the data
+
+
+```{r}
+dd_eco <- read.csv("FLX_ES-LJu_FLUXNET2015_SUBSET_DD_2004-2013_1-4.csv") %>%
+  mutate(DATE = as.Date(as.character(TIMESTAMP), format = "%Y%m%d"))%>% select("DATE", "RECO_NT_VUT_REF", "TA_F") %>%
+  rename(date = DATE, ta = TA_F, pf_orig = RECO_NT_VUT_REF) %>%
+  mutate(pf = pf_orig / max(pf_orig))
+
+```
+
+### Fit our own parameters using UTPC method
+
+We optimise on the least squares of the rescaled data to the universal thermal performance curve using the L-BFSG-U approach to bound the parameters. 
+
+In this chunk we define some functions which we will use later to fit the models and visualise the data. 
+
+```{r}
+
+# Define our fitness function which is the sum of squares of 
+# the predicted - observed
+tpc_fit <- function(x, pf, ta){
+  
+  # extract the parameters
+  yopt  <- x[1] # the value of y at the optimum
+  Topt  <- x[2] # the optimal temperature
+  Delta <- x[3] # the difference between Tc-Topt
+  Tc    <- Topt + Delta # calculate Tc
+  
+  # sum of squares which is to be minimised
+  sum(((yopt * exp( (ta - Topt) / Delta) * (1 - (ta - Topt)/Delta)) - pf) ^ 2)
+  
+  
+}
+
+# Define a function to find sensible initial values for the optimiser
+get_inits <- function(x){
+  
+  # initialise the initial parameter value vector
+  inits <- c(NA, NA, NA)
+  
+  # find the largest performance
+  idx_max_y <- which.max(x$pf)
+  
+  # the largest y value is a good guess for yopt
+  inits[1] <- x$pf[idx_max_y]
+  
+  # the corresponding temperature is a good guess for Topt
+  inits[2] <- x$ta[idx_max_y]
+  
+  # use the largest T value as a simple guess for Delta
+  inits[3] <-tail(x$ta[is.finite(x$ta)],1) - inits[2]
+  
+  # return the initial values
+  return(inits)
+}
+
+
+# a wrapper function to do the fit and return a data.frame
+# The object x coming in is a data.frame of the same structure
+# as the full dataset. The output is a tibble of the same structure
+# with columns appended for estimates of the universal TPC with 
+# prefix "u_"
+do_tpc_fit <- function(x){
+  
+  # call the optimiser
+  fit <- optim(get_inits(x), 
+               tpc_fit,
+               pf = x$pf, 
+               ta = x$ta,
+               method = "L-BFGS-B",
+               lower = c(0.2, 10^-3, 1), 
+               upper = c(10, 150, Inf))
+  
+  # return a tibble (data.frame) of fitted parameters copied over all the 
+  # rows for each experiment.
+  return(x %<>% mutate(u_yopt  = fit$par[1],
+                       u_Topt  = fit$par[2],
+                       u_Delta = fit$par[3],
+                       u_Tc    = fit$par[2] + fit$par[3], 
+                       SS = fit$value)
+         )
+
+  
+}
+
+
+# this function takes a fitted UTPC model and scales the data to the 
+# UTPC. Returns a data.frame the same as the original data.frame
+# with new columns for 
+# scaled performance pf_utpc 
+# and scaled temperature ta_utpc
+data2utpc <- function(dd){
+  dd %<>% mutate(pf_utpc = pf / u_yopt,
+                ta_utpc = (ta - u_Topt) / u_Delta
+                )
+  return(dd)
+}
+
+# This function scales the UTPC curve to the original data based on 
+# the fitted UTPC model. Returns a new data.frame with n values of 
+# the UTPC function evaluated and rescaled to the data provied in dd.
+# Performance can be adjusted according by subtracting the value given in 
+# p_adj, and would typically be used to allow for negative performance values
+# in the data. 
+utpc2data <- function(dd, y_adj = 0, n = 100, x_min = -4, x_max = 1){
+  UTPC <- data.frame(x = seq(x_min, x_max, length.out = n)) %>%
+  mutate(y = (1-x)*exp(x)) %>%
+  mutate(ta = (x * dd$u_Delta[1]) + dd$u_Topt[1],
+         pf = (y * dd$u_yopt[1] - y_adj),
+         type = dd$type[1],
+         pf_max = dd$pf_max[1]
+)
+  return(UTPC)
+}
+```
+
+
+# Plot the raw data
+
+```{r}
+
+tmp <- do_tpc_fit(dd_eco)
+tmp <- data2utpc(tmp)
+tmp_raw <- utpc2data(tmp)
+  
+gg_1 <- ggplot(data = tmp, 
+               mapping = aes(x = ta, y = pf_orig)) + 
+  geom_point() + 
+  geom_line(data = tmp_raw, 
+            mapping = aes(x = ta, y = pf),
+            color = "red") + 
+  xlim(-10, 30)
+
+print(gg_1)
+```
+
+# Take means of pf by ta bins
+
+```{r}
+bin_width = 1
+bin_min <- floor(min(dd_eco$ta)) - bin_width
+bin_max <- ceiling(max(dd_eco$ta)) + bin_width
+
+dd_eco <- dd_eco |> mutate(ta_bin = cut(ta, 
+                                        breaks = seq(bin_min,
+                                                     bin_max, 
+                                                     by = bin_width)))
+
+# aggregate and calculate means
+dd_agg <- dd_eco |> group_by(ta_bin) |>
+  summarise(pf_mean = mean(pf, na.rm = TRUE),
+    .groups = "drop") |>
+  mutate(lower = as.numeric( sub("\\((.+),.*", "\\1", ta_bin) ),
+         upper = as.numeric( sub("[^,]*,([^]]*)\\]", "\\1", ta_bin)),
+         ta = (lower + upper) / 2,
+         pf = pf_mean / max(pf_mean)
+         )
+
+
+```
+
+```{r}
+gg_2 <- ggplot(data = dd_agg, 
+               mapping = aes(x = ta, y = pf)) + 
+  geom_point()
+
+print(gg_2)
+```
+
+
+
+## Fit the UTPC
+
+```{r}
+
+dd_agg <- do_tpc_fit(dd_agg)
+
+# rescale the data onto the UTPC scale
+dd_utpc <- data2utpc(dd_agg)
+```
+
+
+# Plot the UTPC transformed data
+
+```{r}
+gg_3 <- ggplot(data = dd_utpc, 
+               mapping = aes(x = ta_utpc, y = pf_utpc)) + 
+  geom_point() + 
+  geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
+                col = "red", xlim = c(-2.5, 1))
+
+print(gg_3)
+```
+check against eye-balled fit
+
+```{r}
+dd_eyeball <- dd_agg |> 
+  mutate(u_yopt = 0.9, u_Topt = 12, u_Delta = 17)
+
+# rescale the data onto the UTPC scale
+dd_eyeball <- data2utpc(dd_eyeball)
+
+gg_eyeball <- ggplot(data = dd_eyeball, 
+               mapping = aes(x = ta_utpc, y = pf_utpc)) + 
+  geom_point() + 
+  geom_function(fun = function(x) pmax((1-x) * exp(x), 0),
+                col = "red", xlim = c(-2.5, 1))
+
+print(gg_eyeball)
+
+```
+
