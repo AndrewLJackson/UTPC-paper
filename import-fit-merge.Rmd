@@ -263,3 +263,28 @@ print(gg1)
 ```
 
 
+## Generate UTPC curves on the raw data scale and add them together
+
+```{r}
+# rescale the data onto the UTPC scale
+dd_raw_utpc <- map(dd_utpc %>% filter(type == "pho") %>% select(code, u_Delta, u_Topt, u_yopt) %>% 
+                     split(.$code), utpc2data)
+
+dd_added <- dd_raw_utpc %>% 
+  map(\(x) approx(x$ta, x$pf, xout = seq(1, 50, 0.1)) %>% as.data.frame) %>%
+  bind_rows(.id = "code") %>%
+  group_by(x) %>%
+  summarise( y = sum(y, na.rm = T))
+
+
+```
+
+```{r}
+gg_added <- ggplot(data = dd_added, mapping = aes(x = x, y = y)) + 
+  geom_line()
+
+print(gg_added)
+```
+
+
+
