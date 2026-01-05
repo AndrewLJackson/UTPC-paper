@@ -1,0 +1,103 @@
+---
+title: "Supply Demand ODEs"
+output: html_notebook
+---
+
+## Setup
+
+```{r}
+library(deSolve)
+library(tidyverse)
+```
+
+
+## Define the model
+
+```{r}
+
+## Chaos in the atmosphere
+twoCompartments <- function(t, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    dX <-  -a * X
+    dY <- a * X - b * Y
+    list(c(dX, dY))
+  })
+}
+
+parameters <- c(a = 1, b = 0.1)
+state      <- c(X = 100, Y = 0)
+times      <- seq(0, 100, by = 0.1)
+
+out <- ode(y = state, times = times, func = twoCompartments, parms = parameters)
+
+plot(out)
+```
+
+Three compartments
+
+```{r}
+
+## Chaos in the atmosphere
+threeCompartments <- function(t, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    dX <-  -a * X
+    dY <- a * X - b * Y
+    dZ <- b * Y - c * Z
+    list(c(dX, dY, dZ))
+  })
+}
+
+parameters <- c(a = 1, b = 0.8, c = 0.1)
+state      <- c(X = 100, Y = 0, Z = 0)
+times      <- seq(0, 100, by = 0.1)
+
+out <- ode(y = state, times = times, func = threeCompartments, parms = parameters)
+
+plot(out)
+```
+
+Six Compartments
+
+
+Three compartments
+
+```{r}
+
+sixCompartments <- function(t, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    dX <-  -a * X
+    dY <- a * X - b * Y
+    dZ <- b * Y - c * Z
+    dR <- c * Z - d * R
+    dS <- d * R - e * S
+    dT <- e * S - f * T
+    list(c(dX, dY, dZ, dR, dS, dT))
+  })
+}
+
+parameters <- c(a = 0.1, b = 0.1, c = 0.1, d = 0.1, e = 0.1, f = 0.1)
+state      <- c(X = 100, Y = 0, Z = 0, R = 0, S = 0, T = 0)
+times      <- seq(0, 120, by = 0.1)
+
+out <- ode(y = state, times = times, func = sixCompartments, parms = parameters)
+
+plot(out)
+```
+
+
+Check if these curves are the same...
+
+```{r}
+
+out_scaled <- out |> as_tibble()
+
+scaleCols <- function(x){x / max(x, na.rm = TRUE)}
+
+out_scaled <- out_scaled |> mutate(across(2:ncol(out_scaled), scaleCols)) |>
+  as.matrix()
+
+
+matplot(out_scaled[,1], out_scaled[,2:ncol(out_scaled)], type = "l",
+        ylab = "y", xlab = "time")
+```
+
