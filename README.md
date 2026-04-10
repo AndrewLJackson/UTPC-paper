@@ -2,7 +2,7 @@
 
 This repository contains files to reproduce the figures and analyses described within the associated paper: Jean-François Arnoldi, Andrew L Jackson, Ignacio Peralta-Maraver & Nicholas Payne 2025 [A universal thermal performance curve arises in biology and ecology](https://doi.org/10.1073/pnas.2513099122). 
 
-The version of the repository at the time of publication is available at `https://github.com/AndrewLJackson/UTPC-paper/tree/PNAS-2513099122`.
+The version of the repository at the time of publication is available at [https://github.com/AndrewLJackson/UTPC-paper/tree/PNAS-2513099122].
 
 The main file is `Figures-UTPC-paper.Rmd` which reproduces all the figures in the paper. This file calls additional helper functions contained in `Analyses_thermal_functions.R`. To do so it loads three raw data files and one data file of parameter estimates from a cited paper Rezende & Bozinovic 2019: these files are contained in the folder `data/`
 
